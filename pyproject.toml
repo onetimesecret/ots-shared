@@ -1,0 +1,52 @@
+[project]
+name = "ots-shared"
+version = "0.2.0"
+description = "Shared constants and utilities for OTS operations tools"
+readme = {text = "Shared constants and utilities for OTS operations tools.", content-type = "text/plain"}
+requires-python = ">=3.11"
+license = "MIT"
+authors = [{ name = "Onetime" }]
+keywords = ["cli", "infrastructure", "shared"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: System Administrators",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: System :: Systems Administration",
+]
+dependencies = ["cyclopts>=3.9"]
+
+[project.urls]
+Repository = "https://github.com/onetimesecret/ots-containers"
+
+[project.optional-dependencies]
+ssh = ["paramiko>=3.4"]
+dev = ["pyright>=1.1.390"]
+test = ["pytest>=8.0", "pytest-mock>=3.14"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ots_shared"]
+
+[tool.pyright]
+pythonVersion = "3.11"
+typeCheckingMode = "basic"
+include = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py311"
+src = ["src"]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP"]
