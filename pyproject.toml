@@ -20,7 +20,7 @@ classifiers = [
 dependencies = ["cyclopts>=3.9"]
 
 [project.urls]
-Repository = "https://github.com/onetimesecret/ots-containers"
+Repository = "https://github.com/onetimesecret/rots"
 
 [project.optional-dependencies]
 ssh = ["paramiko>=3.4"]
