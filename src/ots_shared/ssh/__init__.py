@@ -42,7 +42,7 @@ __all__ = [
 
 def ssh_connect(
     hostname: str,
-    ssh_config_path: object = None,
+    ssh_config_path: object | None = None,
     timeout: int = 15,
 ) -> object:
     """Open an SSH connection. Deferred import to avoid requiring paramiko."""
