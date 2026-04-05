@@ -7,6 +7,7 @@ from ots_shared.ssh.env import (
     load_env_file,
     resolve_config_dir,
     resolve_host,
+    validate_env_file,
 )
 
 
@@ -347,3 +348,56 @@ class TestGenerateEnvTemplate:
         parsed = load_env_file(env_file)
         assert parsed["OTS_HOST"] == "prod-eu1"
         assert parsed["OTS_TAG"] == "v0.24"
+
+
+class TestValidateEnvFile:
+    """Tests for .otsinfra.env validation."""
+
+    def test_file_not_found(self, tmp_path):
+        nonexistent = tmp_path / ".otsinfra.env"
+
+        warnings, errors = validate_env_file(nonexistent)
+
+        assert warnings == []
+        assert len(errors) == 1
+        assert f"Environment file not found: {nonexistent}" in errors[0]
+
+    def test_missing_ots_host(self, tmp_path):
+        env_file = tmp_path / ".otsinfra.env"
+        env_file.write_text("OTS_TAG=v0.24\nRABBITMQ_URL=amqp://localhost\n")
+
+        warnings, errors = validate_env_file(env_file)
+
+        assert errors == ["OTS_HOST is required for remote operations"]
+        assert warnings == []
+
+    def test_missing_ots_tag(self, tmp_path):
+        env_file = tmp_path / ".otsinfra.env"
+        env_file.write_text("OTS_HOST=example.com\nRABBITMQ_URL=amqp://localhost\n")
+
+        warnings, errors = validate_env_file(env_file)
+
+        assert errors == []
+        assert "OTS_TAG not set — container operations may use defaults" in warnings
+
+    def test_missing_rabbitmq_url(self, tmp_path):
+        env_file = tmp_path / ".otsinfra.env"
+        env_file.write_text("OTS_HOST=example.com\nOTS_TAG=v0.24\n")
+
+        warnings, errors = validate_env_file(env_file)
+
+        assert errors == []
+        assert "RABBITMQ_URL not set — sidecar will use server defaults" in warnings
+
+    def test_fully_populated_file(self, tmp_path):
+        env_file = tmp_path / ".otsinfra.env"
+        env_file.write_text(
+            "OTS_HOST=example.com\n"
+            "OTS_TAG=v0.24\n"
+            "RABBITMQ_URL=amqp://user:pass@localhost:5672/vhost\n"
+        )
+
+        warnings, errors = validate_env_file(env_file)
+
+        assert warnings == []
+        assert errors == []
