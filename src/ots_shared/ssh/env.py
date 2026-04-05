@@ -224,6 +224,10 @@ def validate_env_file(path: Path) -> tuple[list[str], list[str]]:
     warnings: list[str] = []
     errors: list[str] = []
 
+    if not path.is_file():
+        errors.append(f"Environment file not found: {path}")
+        return warnings, errors
+
     env_vars = load_env_file(path)
 
     # Required for SSH targeting
