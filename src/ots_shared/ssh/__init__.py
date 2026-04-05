@@ -1,7 +1,7 @@
 """SSH remote execution support for OTS operations tools.
 
 Public API:
-    - Environment: find_env_file, load_env_file, resolve_config_dir, resolve_host
+    - Environment: find_env_file, load_env_file, resolve_config_dir, resolve_host, validate_env_file
     - Executor: Result, CommandError, Executor, LocalExecutor, SSHExecutor, is_remote
     - Connection: ssh_connect
 """
@@ -12,6 +12,7 @@ from .env import (
     load_env_file,
     resolve_config_dir,
     resolve_host,
+    validate_env_file,
 )
 from .executor import (
     SSH_DEFAULT_TIMEOUT,
@@ -29,6 +30,7 @@ __all__ = [
     "load_env_file",
     "resolve_config_dir",
     "resolve_host",
+    "validate_env_file",
     "SSH_DEFAULT_TIMEOUT",
     "CommandError",
     "Executor",
@@ -42,7 +44,7 @@ __all__ = [
 
 def ssh_connect(
     hostname: str,
-    ssh_config_path: object | None = None,
+    ssh_config_path: object = None,
     timeout: int = 15,
 ) -> object:
     """Open an SSH connection. Deferred import to avoid requiring paramiko."""

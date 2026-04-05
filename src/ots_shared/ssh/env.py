@@ -9,6 +9,8 @@ Standard variables:
     OTS_REPOSITORY  Container image repository
     OTS_TAG         Release version tag (e.g. v0.24)
     OTS_IMAGE       Container image override (optional)
+    RABBITMQ_URL    Sidecar RabbitMQ connection string (optional)
+    SIDECAR_HOST_ID Per-host queue binding identifier (optional, defaults to hostname)
 """
 
 from __future__ import annotations
@@ -161,6 +163,8 @@ def generate_env_template(
     host: str = "",
     tag: str = "",
     repository: str = "",
+    rabbitmq_url: str = "",
+    sidecar_host_id: str = "",
 ) -> str:
     """Generate a .otsinfra.env template with optional pre-filled values.
 
@@ -172,13 +176,71 @@ def generate_env_template(
         "# Walk-up discovery: ots-containers commands search for this file",
         "# starting from the current directory upward to the repo root.",
         "",
+        "# --- SSH Targeting (required) ---",
         f"OTS_HOST={host}",
+        "",
+        "# --- Container Image (required for deploy ops) ---",
         f"OTS_TAG={tag}",
     ]
     if repository:
         lines.append(f"OTS_REPOSITORY={repository}")
+
+    # Sidecar section
+    lines.extend(
+        [
+            "",
+            "# --- Sidecar Configuration (optional) ---",
+            "# RABBITMQ_URL: Connection string for sidecar queue communication",
+            "# Format: amqp://user:pass@host:port/vhost",
+        ]
+    )
+    if rabbitmq_url:
+        lines.append(f"RABBITMQ_URL={rabbitmq_url}")
+    else:
+        lines.append("# RABBITMQ_URL=amqp://onetimesecret:PASS@db-host:5672/onetimesecret")
+
+    lines.extend(
+        [
+            "",
+            "# SIDECAR_HOST_ID: Identifier for per-host queue binding",
+            "# Defaults to socket.gethostname() if not set",
+        ]
+    )
+    if sidecar_host_id:
+        lines.append(f"SIDECAR_HOST_ID={sidecar_host_id}")
+    else:
+        lines.append("# SIDECAR_HOST_ID=")
+
     lines.append("")
     return "\n".join(lines)
+
+
+def validate_env_file(path: Path) -> tuple[list[str], list[str]]:
+    """Validate a .otsinfra.env file for completeness.
+
+    Returns:
+        Tuple of (warnings, errors) — empty lists if valid.
+    """
+    warnings: list[str] = []
+    errors: list[str] = []
+
+    env_vars = load_env_file(path)
+
+    # Required for SSH targeting
+    if not env_vars.get("OTS_HOST"):
+        errors.append("OTS_HOST is required for remote operations")
+
+    # Required for container operations
+    if not env_vars.get("OTS_TAG"):
+        warnings.append("OTS_TAG not set — container operations may use defaults")
+
+    # Optional but recommended for sidecar
+    if not env_vars.get("RABBITMQ_URL"):
+        warnings.append("RABBITMQ_URL not set — sidecar will use server defaults")
+
+    # SIDECAR_HOST_ID is optional — falls back to socket.gethostname()
+
+    return warnings, errors
 
 
 def _tag_to_version(tag: str) -> str | None:
