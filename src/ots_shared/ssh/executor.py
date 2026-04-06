@@ -17,7 +17,7 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol, runtime_checkable
+from typing import Protocol, TypeGuard, runtime_checkable
 
 # Default timeout (in seconds) for SSH command execution.
 # Prevents hung remote processes from running indefinitely.
@@ -154,10 +154,13 @@ def _require_list(cmd: object, method: str) -> None:
         )
 
 
-def is_remote(executor: Executor | None) -> bool:
+def is_remote(executor: Executor | None) -> TypeGuard[Executor]:
     """Return True if *executor* dispatches commands to a remote host.
 
     Returns False for ``None`` (no executor) or a :class:`LocalExecutor`.
+
+    The TypeGuard return type tells the type checker that when this
+    returns True, *executor* is narrowed to :class:`Executor` (non-None).
     """
     if executor is None:
         return False
