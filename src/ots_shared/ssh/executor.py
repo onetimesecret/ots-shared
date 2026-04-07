@@ -141,6 +141,17 @@ class Executor(Protocol):
     def close(self) -> None: ...
 
 
+@runtime_checkable
+class RemoteExecutor(Executor, Protocol):
+    """Protocol for executors that dispatch commands to a remote host.
+
+    This is a marker protocol — it has no additional methods beyond Executor.
+    Used with TypeGuard to enable proper type narrowing after is_remote() checks.
+    """
+
+    pass
+
+
 def _require_list(cmd: object, method: str) -> None:
     """Raise TypeError if *cmd* is a str instead of list[str].
 
@@ -154,13 +165,13 @@ def _require_list(cmd: object, method: str) -> None:
         )
 
 
-def is_remote(executor: Executor | None) -> TypeGuard[Executor]:
+def is_remote(executor: Executor | None) -> TypeGuard[RemoteExecutor]:
     """Return True if *executor* dispatches commands to a remote host.
 
     Returns False for ``None`` (no executor) or a :class:`LocalExecutor`.
 
     The TypeGuard return type tells the type checker that when this
-    returns True, *executor* is narrowed to :class:`Executor` (non-None).
+    returns True, *executor* is narrowed to :class:`RemoteExecutor`.
     """
     if executor is None:
         return False

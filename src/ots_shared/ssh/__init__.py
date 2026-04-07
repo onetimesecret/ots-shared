@@ -3,7 +3,8 @@
 Public API:
     - Environment: find_env_file, generate_env_template, load_env_file,
       resolve_config_dir, resolve_host, validate_env_file
-    - Executor: Result, CommandError, Executor, LocalExecutor, SSHExecutor, is_remote
+    - Executor: Result, CommandError, Executor, RemoteExecutor, LocalExecutor,
+      SSHExecutor, is_remote
     - Connection: ssh_connect
 """
 
@@ -20,6 +21,7 @@ from .executor import (
     CommandError,
     Executor,
     LocalExecutor,
+    RemoteExecutor,
     Result,
     SSHExecutor,
     is_remote,
@@ -36,6 +38,7 @@ __all__ = [
     "CommandError",
     "Executor",
     "LocalExecutor",
+    "RemoteExecutor",
     "Result",
     "SSHExecutor",
     "is_remote",
