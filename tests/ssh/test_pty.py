@@ -1,3 +1,5 @@
+# packages/rots/packages/ots-shared/tests/ssh/test_pty.py
+
 """Tests for ots_shared.ssh._pty module.
 
 All termios/tty/signal interactions are mocked — these tests run on any

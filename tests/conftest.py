@@ -1,3 +1,5 @@
+# packages/rots/packages/ots-shared/tests/conftest.py
+
 """Shared fixtures for ots_shared tests.
 
 Provides reusable fixtures for SSH-related tests so individual test

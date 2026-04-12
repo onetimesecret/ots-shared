@@ -1,3 +1,5 @@
+# packages/rots/packages/ots-shared/src/ots_shared/ssh/_pty.py
+
 """PTY helper for interactive SSH sessions.
 
 Internal module — not exported from ots_shared.ssh.__init__.

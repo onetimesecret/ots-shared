@@ -1,3 +1,5 @@
+# packages/rots/packages/ots-shared/tests/test_cli.py
+
 """Tests for ots_shared.cli — shared cyclopts type aliases."""
 
 import typing

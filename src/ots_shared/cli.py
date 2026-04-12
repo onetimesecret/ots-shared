@@ -1,3 +1,5 @@
+# packages/rots/packages/ots-shared/src/ots_shared/cli.py
+
 """Shared cyclopts type aliases for consistent CLI flags across OTS tools.
 
 All common flags use long+short forms for consistency:

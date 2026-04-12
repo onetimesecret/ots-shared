@@ -1,4 +1,4 @@
-# deployments/containers/packages/ots-shared/src/ots_shared/ssh/env.py
+# packages/rots/packages/ots-shared/src/ots_shared/ssh/env.py
 
 """OTS environment discovery, parsing, and host resolution.
 

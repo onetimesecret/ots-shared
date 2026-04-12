@@ -1,3 +1,5 @@
+# packages/rots/packages/ots-shared/src/ots_shared/exit_codes.py
+
 """Standardised exit codes for all OTS CLI tools.
 
 All commands across rots, lots, and pots use this scheme so that CI

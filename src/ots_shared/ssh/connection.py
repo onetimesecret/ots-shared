@@ -1,3 +1,5 @@
+# packages/rots/packages/ots-shared/src/ots_shared/ssh/connection.py
+
 """Paramiko SSHClient factory using ~/.ssh/config.
 
 Creates SSH connections that honour the user's SSH config for Host,

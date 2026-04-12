@@ -1,3 +1,5 @@
+# packages/rots/packages/ots-shared/src/ots_shared/init.py
+
 """Shared ``init`` sub-app for OTS CLI tools.
 
 Creates the ``.otsinfra.yaml`` marker file that signals "this is an

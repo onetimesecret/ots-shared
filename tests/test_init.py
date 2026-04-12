@@ -1,3 +1,5 @@
+# packages/rots/packages/ots-shared/tests/test_init.py
+
 """Tests for ots_shared.init — shared init sub-app."""
 
 from pathlib import Path

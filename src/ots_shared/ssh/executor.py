@@ -1,3 +1,5 @@
+# packages/rots/packages/ots-shared/src/ots_shared/ssh/executor.py
+
 """Command execution abstraction for local and remote (SSH) targets.
 
 Provides a Protocol-based executor pattern so callers can run shell commands

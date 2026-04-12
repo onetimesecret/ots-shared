@@ -1,3 +1,5 @@
+# packages/rots/packages/ots-shared/src/ots_shared/history.py
+
 """Command history tracking for OTS CLI tools.
 
 Logs mutating commands to a SQLite database in the current directory
