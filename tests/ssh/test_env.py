@@ -3,8 +3,10 @@
 from ots_shared.ssh.env import (
     _tag_to_version,
     find_env_file,
+    find_marker,
     generate_env_template,
     load_env_file,
+    load_marker,
     resolve_config_dir,
     resolve_host,
     validate_env_file,
@@ -320,6 +322,110 @@ class TestResolveConfigDir:
 
         result = resolve_config_dir(start=subdir)
         assert result == tmp_path / "config"
+
+
+class TestFindMarker:
+    """Tests for .otsinfra.yaml / .otsinfra.env walk-up discovery."""
+
+    def test_finds_yaml_marker(self, tmp_path):
+        marker = tmp_path / ".otsinfra.yaml"
+        marker.write_text("environment: eu2\n")
+        result = find_marker(start=tmp_path)
+        assert result == marker
+
+    def test_prefers_yaml_over_env(self, tmp_path):
+        yaml_marker = tmp_path / ".otsinfra.yaml"
+        yaml_marker.write_text("environment: eu2\n")
+        env_file = tmp_path / ".otsinfra.env"
+        env_file.write_text("OTS_HOST=example.com\n")
+
+        result = find_marker(start=tmp_path)
+        assert result == yaml_marker
+
+    def test_falls_back_to_env(self, tmp_path):
+        env_file = tmp_path / ".otsinfra.env"
+        env_file.write_text("OTS_HOST=example.com\n")
+        result = find_marker(start=tmp_path)
+        assert result == env_file
+
+    def test_returns_none_when_neither(self, tmp_path):
+        result = find_marker(start=tmp_path)
+        assert result is None
+
+    def test_walks_up_to_find_yaml(self, tmp_path):
+        marker = tmp_path / ".otsinfra.yaml"
+        marker.write_text("environment: eu2\n")
+        subdir = tmp_path / "deep" / "nested"
+        subdir.mkdir(parents=True)
+
+        result = find_marker(start=subdir)
+        assert result == marker
+
+
+class TestLoadMarker:
+    """Tests for .otsinfra.yaml parsing."""
+
+    def test_loads_simple_yaml(self, tmp_path):
+        marker = tmp_path / ".otsinfra.yaml"
+        marker.write_text("environment: eu2\ncreated: '2026-04-10'\n")
+        data = load_marker(marker)
+        assert data["environment"] == "eu2"
+        assert data["created"] == "2026-04-10"
+
+    def test_empty_file(self, tmp_path):
+        marker = tmp_path / ".otsinfra.yaml"
+        marker.write_text("")
+        data = load_marker(marker)
+        assert data == {}
+
+    def test_nonexistent_file(self, tmp_path):
+        data = load_marker(tmp_path / "nope.yaml")
+        assert data == {}
+
+    def test_comments_ignored(self, tmp_path):
+        marker = tmp_path / ".otsinfra.yaml"
+        marker.write_text("# marker file\nenvironment: eu2\n")
+        data = load_marker(marker)
+        assert data["environment"] == "eu2"
+        assert len(data) == 1
+
+
+class TestResolveConfigDirWithMarker:
+    """resolve_config_dir anchors off .otsinfra.yaml."""
+
+    def test_yaml_marker_with_config_sibling(self, tmp_path):
+        marker = tmp_path / ".otsinfra.yaml"
+        marker.write_text("environment: eu2\n")
+        (tmp_path / "config").mkdir()
+
+        result = resolve_config_dir(start=tmp_path)
+        assert result == tmp_path / "config"
+
+    def test_yaml_marker_without_config_returns_none(self, tmp_path):
+        marker = tmp_path / ".otsinfra.yaml"
+        marker.write_text("environment: eu2\n")
+        # No config/ directory
+
+        result = resolve_config_dir(start=tmp_path)
+        assert result is None
+
+    def test_yaml_marker_walks_up(self, tmp_path):
+        marker = tmp_path / ".otsinfra.yaml"
+        marker.write_text("environment: eu2\n")
+        (tmp_path / "config").mkdir()
+        subdir = tmp_path / "deep"
+        subdir.mkdir()
+
+        result = resolve_config_dir(start=subdir)
+        assert result == tmp_path / "config"
+
+    def test_random_config_dir_without_marker_not_found(self, tmp_path):
+        """A config/ directory without a marker file is NOT returned."""
+        (tmp_path / "config").mkdir()
+        # No .otsinfra.yaml or .otsinfra.env
+
+        result = resolve_config_dir(start=tmp_path)
+        assert result is None
 
 
 class TestGenerateEnvTemplate:

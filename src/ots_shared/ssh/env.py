@@ -1,16 +1,18 @@
-""".otsinfra.env discovery, parsing, and host resolution.
+# deployments/containers/packages/ots-shared/src/ots_shared/ssh/env.py
 
-The .otsinfra.env file provides targeting context for remote execution.
-It is discovered by walking up from the current directory, stopping at
-the repository root (.git) or the user's home directory.
+"""OTS environment discovery, parsing, and host resolution.
 
-Standard variables:
-    OTS_HOST        Target host (SSH hostname or alias)
-    OTS_REPOSITORY  Container image repository
-    OTS_TAG         Release version tag (e.g. v0.24)
-    OTS_IMAGE       Container image override (optional)
-    RABBITMQ_URL    Sidecar RabbitMQ connection string (optional)
-    SIDECAR_HOST_ID Per-host queue binding identifier (optional, defaults to hostname)
+Two file types mark an OTS environment directory:
+
+``.otsinfra.yaml`` (current)
+    Lightweight YAML marker and metadata. Its presence signals "this is
+    an OTS environment directory". Direnv handles all env vars; this file
+    carries structured metadata that doesn't belong in shell state.
+
+``.otsinfra.env`` (legacy)
+    KEY=VALUE targeting context for remote execution. Still supported for
+    backward compatibility — walk-up discovery falls back to it when
+    ``.otsinfra.yaml`` is not found.
 """
 
 from __future__ import annotations
@@ -22,13 +24,14 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+MARKER_FILENAME = ".otsinfra.yaml"
 ENV_FILENAME = ".otsinfra.env"
 _CONFIG_DIR_PREFIX = "config-v"
 _CONFIG_SYMLINK = "config"
 
 
-def find_env_file(start: Path | None = None) -> Path | None:
-    """Walk up from *start* looking for a .otsinfra.env file.
+def _walk_up(filename: str, start: Path | None = None) -> Path | None:
+    """Walk up from *start* looking for *filename*.
 
     Stops at the first directory containing .git or at the user's home
     directory — whichever is reached first. Returns None if not found.
@@ -37,7 +40,7 @@ def find_env_file(start: Path | None = None) -> Path | None:
     home = Path.home().resolve()
 
     while True:
-        candidate = current / ENV_FILENAME
+        candidate = current / filename
         if candidate.is_file():
             return candidate
 
@@ -55,6 +58,64 @@ def find_env_file(start: Path | None = None) -> Path | None:
             return None
 
         current = parent
+
+
+def find_marker(start: Path | None = None) -> Path | None:
+    """Walk up looking for ``.otsinfra.yaml``, then ``.otsinfra.env``.
+
+    Prefers the YAML marker. Falls back to the legacy env file so
+    existing environments continue to work during migration.
+    """
+    yaml_path = _walk_up(MARKER_FILENAME, start)
+    if yaml_path is not None:
+        return yaml_path
+    return _walk_up(ENV_FILENAME, start)
+
+
+def find_env_file(start: Path | None = None) -> Path | None:
+    """Walk up from *start* looking for a .otsinfra.env file.
+
+    Stops at the first directory containing .git or at the user's home
+    directory — whichever is reached first. Returns None if not found.
+
+    .. deprecated:: Use :func:`find_marker` for environment directory
+       discovery. This function is retained for code that specifically
+       needs the KEY=VALUE env file.
+    """
+    return _walk_up(ENV_FILENAME, start)
+
+
+def load_marker(path: Path) -> dict:
+    """Load an ``.otsinfra.yaml`` marker file.
+
+    Returns a dict of the YAML contents. Uses a minimal safe loader
+    that doesn't require PyYAML — the file format is simple enough
+    for basic KEY: VALUE parsing. Falls back to PyYAML if available.
+    """
+    if not path.is_file():
+        return {}
+
+    text = path.read_text()
+
+    # Try PyYAML first (preferred, handles all YAML)
+    try:
+        import yaml
+
+        return yaml.safe_load(text) or {}
+    except ImportError:
+        pass
+
+    # Minimal fallback: parse simple "key: value" lines
+    result: dict = {}
+    for line in text.splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if ":" not in line:
+            continue
+        key, _, value = line.partition(":")
+        result[key.strip()] = value.strip()
+    return result
 
 
 def load_env_file(path: Path) -> dict[str, str]:
@@ -118,27 +179,36 @@ def resolve_config_dir(start: Path | None = None) -> Path | None:
     """Resolve the current config directory for a jurisdiction.
 
     Resolution order:
-        1. A ``config`` symlink or directory sibling to the .otsinfra.env file
-           (stable pointer managed by the operator).
-        2. OTS_TAG from .otsinfra.env → versioned directory name
-           (e.g. ``v0.24`` → ``config-v0.24``).
+        1. ``$OTS_CONFIG_DIR`` environment variable (explicit override).
+        2. ``config/`` sibling to a ``.otsinfra.yaml`` or ``.otsinfra.env``
+           marker (walk-up discovery confirms we're in an OTS environment).
+        3. OTS_TAG from ``.otsinfra.env`` → versioned directory name
+           (e.g. ``v0.24`` → ``config-v0.24``). Legacy path.
 
-    The config directory is expected to be a sibling of the env file.
     Returns the directory path if it exists, None otherwise.
     """
+    # 1. Explicit env var override
+    env_config_dir = os.environ.get("OTS_CONFIG_DIR")
+    if env_config_dir:
+        p = Path(env_config_dir)
+        if p.is_dir():
+            logger.debug("Config dir from $OTS_CONFIG_DIR: %s", p)
+            return p
+        logger.warning("$OTS_CONFIG_DIR set but not a directory: %s", p)
+
+    # 2. Walk up to find the environment marker, then check for sibling config/
+    marker_path = find_marker(start)
+    if marker_path is not None:
+        config_dir = marker_path.parent / _CONFIG_SYMLINK
+        if config_dir.is_dir():
+            logger.debug("Config dir from %s sibling: %s", marker_path.name, config_dir)
+            return config_dir
+
+    # 3. Legacy: derive from OTS_TAG in .otsinfra.env
     env_path = find_env_file(start)
     if env_path is None:
         return None
 
-    parent = env_path.parent
-
-    # 1. Stable symlink convention: config -> config-v0.24
-    symlink = parent / _CONFIG_SYMLINK
-    if symlink.is_dir():
-        logger.debug("Config dir from symlink %s: %s", symlink, symlink.resolve())
-        return symlink
-
-    # 2. Derive from OTS_TAG
     env_vars = load_env_file(env_path)
     tag = env_vars.get("OTS_TAG")
     if not tag:
@@ -150,7 +220,7 @@ def resolve_config_dir(start: Path | None = None) -> Path | None:
         logger.warning("Cannot parse version from OTS_TAG=%s in %s", tag, env_path)
         return None
 
-    config_dir = parent / f"{_CONFIG_DIR_PREFIX}{version}"
+    config_dir = env_path.parent / f"{_CONFIG_DIR_PREFIX}{version}"
     if config_dir.is_dir():
         logger.debug("Config dir from %s: %s", env_path, config_dir)
         return config_dir
