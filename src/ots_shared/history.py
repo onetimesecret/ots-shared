@@ -95,7 +95,7 @@ def serialize_to_sql(directory: Path | None = None) -> Path:
         ]
 
         for row in rows:
-            args_val = f"'{row['args_json']}'" if row["args_json"] else "NULL"
+            args_val = f"'{_sql_escape(row['args_json'])}'" if row["args_json"] else "NULL"
             result_val = f"'{_sql_escape(row['result'])}'" if row["result"] else "NULL"
             lines.append(
                 f"INSERT INTO command_log "
