@@ -1,8 +1,8 @@
 """Standardised exit codes for all OTS CLI tools.
 
-All commands across ots-containers, hcloud-manager, otsinfra, and
-ots-cloudinit use this scheme so that CI pipelines and shell scripts
-can distinguish between different failure modes.
+All commands across rots, lots, and pots use this scheme so that CI
+pipelines and shell scripts can distinguish between different failure
+modes.
 
 Usage::
 
