@@ -1,8 +1,11 @@
 """Tests for ots_shared.init — shared init sub-app."""
 
+from pathlib import Path
+from unittest.mock import patch
+
 import pytest
 
-from ots_shared.init import app
+from ots_shared.init import app, init
 from ots_shared.ssh.env import MARKER_FILENAME, load_marker
 
 
@@ -94,3 +97,24 @@ class TestInitErrorCases:
         # Scaffold files should NOT have been overwritten
         assert (tmp_path / ".gitignore").read_text() == "old\n"
         assert (tmp_path / ".envrc").read_text() == "old\n"
+
+
+class TestInitDefaultEnvironmentFallback:
+    """Edge case: environment falls back to 'default' when directory name is empty."""
+
+    @patch("ots_shared.init.create_envrc_template")
+    @patch("ots_shared.init.create_gitignore")
+    @patch("ots_shared.init.create_marker")
+    def test_root_path_uses_default_as_environment_name(
+        self, mock_create_marker, mock_create_gitignore, mock_create_envrc_template
+    ):
+        """Path('/').resolve().name is '', so environment should fall back to 'default'."""
+        mock_create_marker.return_value = Path("/.otsinfra.yaml")
+        mock_create_gitignore.return_value = Path("/.gitignore")
+        mock_create_envrc_template.return_value = Path("/.envrc")
+
+        init(directory=Path("/"))
+
+        mock_create_marker.assert_called_once()
+        call_args = mock_create_marker.call_args
+        assert call_args[0][1] == "default"

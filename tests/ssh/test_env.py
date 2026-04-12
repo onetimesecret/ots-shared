@@ -483,6 +483,28 @@ class TestCreateMarker:
         assert data["environment"] == "us-prod"
         assert "created" in data
 
+    def test_hosts_written_to_yaml(self, tmp_path):
+        hosts = {"db": {"private_ip_address": "10.0.0.11"}}
+        path = create_marker(tmp_path, "eu2", hosts=hosts)
+        data = load_marker(path)
+        assert data["hosts"] == {"db": {"private_ip_address": "10.0.0.11"}}
+
+    def test_hosts_multiple_roles(self, tmp_path):
+        hosts = {
+            "db": {"private_ip_address": "10.0.0.11"},
+            "web": {"private_ip_address": "10.0.0.12", "public_ip": "203.0.113.5"},
+        }
+        path = create_marker(tmp_path, "eu2", hosts=hosts)
+        data = load_marker(path)
+        assert data["hosts"]["db"]["private_ip_address"] == "10.0.0.11"
+        assert data["hosts"]["web"]["private_ip_address"] == "10.0.0.12"
+        assert data["hosts"]["web"]["public_ip"] == "203.0.113.5"
+
+    def test_hosts_none_omits_block(self, tmp_path):
+        path = create_marker(tmp_path, "eu2", hosts=None)
+        content = path.read_text()
+        assert "hosts:" not in content
+
 
 class TestGenerateEnvTemplate:
     """Tests for .otsinfra.env template generation."""
