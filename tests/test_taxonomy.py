@@ -1,4 +1,4 @@
-# packages/rots/packages/ots-shared/tests/test_taxonomy.py
+# packages/ots-shared/tests/test_taxonomy.py
 
 """Tests for ots_shared.taxonomy module."""
 

@@ -1,4 +1,4 @@
-# packages/rots/packages/ots-shared/tests/conftest.py
+# packages/ots-shared/tests/conftest.py
 
 """Shared fixtures for ots_shared tests.
 

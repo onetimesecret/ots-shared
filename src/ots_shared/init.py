@@ -1,4 +1,4 @@
-# packages/rots/packages/ots-shared/src/ots_shared/init.py
+# packages/ots-shared/src/ots_shared/init.py
 
 """Shared ``init`` sub-app for OTS CLI tools.
 

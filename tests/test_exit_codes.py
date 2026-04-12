@@ -1,4 +1,4 @@
-# packages/rots/packages/ots-shared/tests/test_exit_codes.py
+# packages/ots-shared/tests/test_exit_codes.py
 
 """Tests for ots_shared.exit_codes module."""
 

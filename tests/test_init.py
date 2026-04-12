@@ -1,4 +1,4 @@
-# packages/rots/packages/ots-shared/tests/test_init.py
+# packages/ots-shared/tests/test_init.py
 
 """Tests for ots_shared.init — shared init sub-app."""
 

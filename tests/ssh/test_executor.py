@@ -1,4 +1,4 @@
-# packages/rots/packages/ots-shared/tests/ssh/test_executor.py
+# packages/ots-shared/tests/ssh/test_executor.py
 
 """Tests for ots_shared.ssh.executor module."""
 

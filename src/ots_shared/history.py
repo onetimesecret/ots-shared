@@ -1,4 +1,4 @@
-# packages/rots/packages/ots-shared/src/ots_shared/history.py
+# packages/ots-shared/src/ots_shared/history.py
 
 """Command history tracking for OTS CLI tools.
 

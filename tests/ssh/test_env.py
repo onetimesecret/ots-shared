@@ -1,4 +1,4 @@
-# packages/rots/packages/ots-shared/tests/ssh/test_env.py
+# packages/ots-shared/tests/ssh/test_env.py
 
 """Tests for ots_shared.ssh.env module."""
 
