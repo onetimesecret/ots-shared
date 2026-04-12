@@ -420,7 +420,7 @@ def generate_env_template(
     lines = [
         "# .otsinfra.env — targeting context for OTS remote operations",
         "#",
-        "# Walk-up discovery: ots-containers commands search for this file",
+        "# Walk-up discovery: rots commands search for this file",
         "# starting from the current directory upward to the repo root.",
         "",
         "# --- SSH Targeting (required) ---",

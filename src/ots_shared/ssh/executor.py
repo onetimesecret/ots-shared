@@ -6,7 +6,7 @@ Provides a Protocol-based executor pattern so callers can run shell commands
 without knowing whether they execute locally or over SSH.  Also supports
 individual file transfers via ``put_file`` / ``get_file`` (SFTP for SSH,
 local filesystem for local).  For bulk file operations, use rsync
-(see ``ots_containers.commands.host._rsync``).
+(see ``rots.commands.host._rsync``).
 """
 
 from __future__ import annotations

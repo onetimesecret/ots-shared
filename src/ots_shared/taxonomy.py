@@ -3,7 +3,7 @@
 """Canonical jurisdiction and environment vocabularies for OTS infrastructure.
 
 These vocabularies are the single source of truth for taxonomy inference
-across all OTS CLI tools (otsinfra, ots-cloudinit, hcloud-manager, etc.).
+across all OTS CLI tools (rots, lots, pots, etc.).
 
 Jurisdictions are ISO 3166-1 alpha-2 country codes used in hostname
 segments, directory structures, and inventory records.
