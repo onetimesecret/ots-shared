@@ -1,10 +1,13 @@
 """Tests for ots_shared.ssh.env module."""
 
 from ots_shared.ssh.env import (
+    MARKER_FILENAME,
     _tag_to_version,
+    create_marker,
     find_env_file,
     find_marker,
     generate_env_template,
+    generate_marker,
     load_env_file,
     load_marker,
     resolve_config_dir,
@@ -426,6 +429,59 @@ class TestResolveConfigDirWithMarker:
 
         result = resolve_config_dir(start=tmp_path)
         assert result is None
+
+
+class TestGenerateMarker:
+    """Tests for .otsinfra.yaml content generation."""
+
+    def test_basic_content(self):
+        content = generate_marker("eu2")
+        assert "environment: eu2" in content
+        assert "created:" in content
+
+    def test_extra_metadata(self):
+        content = generate_marker("eu2", tier="prod", region="eu-central")
+        assert "tier: prod" in content
+        assert "region: eu-central" in content
+
+    def test_special_chars_quoted(self):
+        content = generate_marker("eu2", note="has:colon")
+        assert "note: 'has:colon'" in content
+
+    def test_trailing_newline(self):
+        content = generate_marker("eu2")
+        assert content.endswith("\n")
+
+
+class TestCreateMarker:
+    """Tests for .otsinfra.yaml file creation."""
+
+    def test_creates_file(self, tmp_path):
+        path = create_marker(tmp_path, "eu2")
+        assert path == tmp_path / MARKER_FILENAME
+        assert path.exists()
+        content = path.read_text()
+        assert "environment: eu2" in content
+
+    def test_refuses_overwrite_without_force(self, tmp_path):
+        marker = tmp_path / MARKER_FILENAME
+        marker.write_text("existing\n")
+        import pytest
+
+        with pytest.raises(FileExistsError):
+            create_marker(tmp_path, "eu2")
+
+    def test_force_overwrites(self, tmp_path):
+        marker = tmp_path / MARKER_FILENAME
+        marker.write_text("old\n")
+        path = create_marker(tmp_path, "eu2", force=True)
+        assert "environment: eu2" in path.read_text()
+
+    def test_roundtrip_with_load_marker(self, tmp_path):
+        create_marker(tmp_path, "us-prod")
+        data = load_marker(tmp_path / MARKER_FILENAME)
+        assert data["environment"] == "us-prod"
+        assert "created" in data
 
 
 class TestGenerateEnvTemplate:

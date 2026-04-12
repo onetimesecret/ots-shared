@@ -20,6 +20,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+from datetime import date
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -116,6 +117,48 @@ def load_marker(path: Path) -> dict:
         key, _, value = line.partition(":")
         result[key.strip()] = value.strip()
     return result
+
+
+def generate_marker(environment: str, **metadata: str) -> str:
+    """Generate ``.otsinfra.yaml`` content.
+
+    Returns YAML text with ``environment`` and ``created`` fields,
+    plus any additional metadata key-value pairs.
+    """
+    lines = [
+        f"environment: {environment}",
+        f"created: '{date.today().isoformat()}'",
+    ]
+    for key, value in metadata.items():
+        # Quote values that could be misinterpreted by YAML parsers
+        if any(c in str(value) for c in ":#{}[]|>&*!%@"):
+            lines.append(f"{key}: '{value}'")
+        else:
+            lines.append(f"{key}: {value}")
+    lines.append("")
+    return "\n".join(lines)
+
+
+def create_marker(
+    directory: Path,
+    environment: str,
+    *,
+    force: bool = False,
+    **metadata: str,
+) -> Path:
+    """Create ``.otsinfra.yaml`` in *directory*.
+
+    Returns the path to the created file.
+
+    Raises:
+        FileExistsError: If the marker already exists and *force* is False.
+    """
+    marker_path = directory / MARKER_FILENAME
+    if marker_path.exists() and not force:
+        raise FileExistsError(f"{marker_path} already exists (use --force to overwrite)")
+    content = generate_marker(environment, **metadata)
+    marker_path.write_text(content)
+    return marker_path
 
 
 def load_env_file(path: Path) -> dict[str, str]:
