@@ -119,11 +119,20 @@ def load_marker(path: Path) -> dict:
     return result
 
 
-def generate_marker(environment: str, **metadata: str) -> str:
+def generate_marker(
+    environment: str,
+    *,
+    hosts: dict[str, dict[str, str]] | None = None,
+    **metadata: str,
+) -> str:
     """Generate ``.otsinfra.yaml`` content.
 
     Returns YAML text with ``environment`` and ``created`` fields,
     plus any additional metadata key-value pairs.
+
+    When *hosts* is provided, a ``hosts:`` block is appended keyed by
+    role (e.g. ``db``, ``web``) with nested attributes like
+    ``private_ip_address``.
     """
     lines = [
         f"environment: {environment}",
@@ -135,6 +144,12 @@ def generate_marker(environment: str, **metadata: str) -> str:
             lines.append(f"{key}: '{value}'")
         else:
             lines.append(f"{key}: {value}")
+    if hosts:
+        lines.append("hosts:")
+        for role, attrs in hosts.items():
+            lines.append(f"  {role}:")
+            for attr_key, attr_value in attrs.items():
+                lines.append(f"    {attr_key}: {attr_value}")
     lines.append("")
     return "\n".join(lines)
 
@@ -159,6 +174,88 @@ def create_marker(
     content = generate_marker(environment, **metadata)
     marker_path.write_text(content)
     return marker_path
+
+
+GITIGNORE_FILENAME = ".gitignore"
+ENVRC_FILENAME = ".envrc"
+
+DEFAULT_HOSTS: dict[str, dict[str, str]] = {
+    "db": {"private_ip_address": "10.0.0.11"},
+    "web": {"private_ip_address": "10.0.0.21"},
+}
+
+
+def get_host_ip(marker: dict, role: str) -> str | None:
+    """Extract ``private_ip_address`` for *role* from loaded marker data."""
+    hosts = marker.get("hosts", {})
+    host = hosts.get(role, {})
+    return host.get("private_ip_address")
+
+
+def generate_gitignore() -> str:
+    """Generate ``.gitignore`` content for an OTS environment directory."""
+    lines = [
+        ".envrc",
+        "*.env",
+        "config/",
+        "gitrepo/",
+        "history.db",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def create_gitignore(directory: Path, *, force: bool = False) -> Path:
+    """Create ``.gitignore`` in *directory*.
+
+    Raises:
+        FileExistsError: If the file already exists and *force* is False.
+    """
+    path = directory / GITIGNORE_FILENAME
+    if path.exists() and not force:
+        raise FileExistsError(f"{path} already exists (use --force to overwrite)")
+    path.write_text(generate_gitignore())
+    return path
+
+
+def generate_envrc_template() -> str:
+    """Generate a template ``.envrc`` for a new OTS environment.
+
+    Values are empty — the operator fills them in after generating
+    credentials. Host IPs live in ``.otsinfra.yaml``, not here.
+    """
+    lines = [
+        "# .envrc — otsinfra environment",
+        f"# Created: {date.today().isoformat()}",
+        "source_up",
+        "",
+        'export OTS_USER_PASSWD_HASH=""',
+        'export OTS_SSH_PUBKEY=""',
+        'export HCLOUD_TOKEN="<paste-token-here>"',
+        'export RABBITMQ_PASS=""',
+        "",
+        "# Host IPs defined in .otsinfra.yaml",
+        "",
+        "# Inherited from ancestor .envrc — uncomment to override",
+        "# JURISDICTION=EU",
+        "# VALKEY_PORT=5212",
+        "# ENVIRONMENT=non-prod",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+def create_envrc_template(directory: Path, *, force: bool = False) -> Path:
+    """Create a template ``.envrc`` in *directory*.
+
+    Raises:
+        FileExistsError: If the file already exists and *force* is False.
+    """
+    path = directory / ENVRC_FILENAME
+    if path.exists() and not force:
+        raise FileExistsError(f"{path} already exists (use --force to overwrite)")
+    path.write_text(generate_envrc_template())
+    return path
 
 
 def load_env_file(path: Path) -> dict[str, str]:
