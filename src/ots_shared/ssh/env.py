@@ -195,6 +195,7 @@ def create_marker(
     environment: str,
     *,
     force: bool = False,
+    hosts: dict[str, dict[str, str]] | None = None,
     **metadata: str,
 ) -> Path:
     """Create ``.otsinfra.yaml`` in *directory*.
@@ -207,7 +208,7 @@ def create_marker(
     marker_path = directory / MARKER_FILENAME
     if marker_path.exists() and not force:
         raise FileExistsError(f"{marker_path} already exists (use --force to overwrite)")
-    content = generate_marker(environment, **metadata)
+    content = generate_marker(environment, hosts=hosts, **metadata)
     marker_path.write_text(content)
     return marker_path
 

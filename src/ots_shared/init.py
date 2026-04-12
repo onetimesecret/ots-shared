@@ -11,7 +11,6 @@ Usage in a tool's ``cli.py``::
 
 from __future__ import annotations
 
-import logging
 import sys
 from pathlib import Path
 from typing import Annotated
@@ -24,8 +23,6 @@ from ots_shared.ssh.env import (
     create_gitignore,
     create_marker,
 )
-
-logger = logging.getLogger(__name__)
 
 app = cyclopts.App(
     name="init",
@@ -49,7 +46,9 @@ def init(
     ] = Path("."),
     force: Annotated[
         bool,
-        cyclopts.Parameter(help="Overwrite existing marker file"),
+        cyclopts.Parameter(
+            help="Overwrite existing init files (.otsinfra.yaml, .gitignore, .envrc template)"
+        ),
     ] = False,
 ) -> None:
     """Create .otsinfra.yaml environment marker.
@@ -67,7 +66,7 @@ def init(
         pots init -C ~/ops/environments/non-prod/eu2
     """
     target = directory.resolve()
-    environment = environment or target.name
+    environment = environment or target.name or "default"
     if not target.is_dir():
         print(f"Error: {target} is not a directory", file=sys.stderr)
         sys.exit(1)
