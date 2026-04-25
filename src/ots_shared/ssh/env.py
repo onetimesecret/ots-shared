@@ -20,6 +20,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
@@ -227,6 +228,54 @@ def get_host_ip(marker: dict, role: str) -> str | None:
     hosts = marker.get("hosts", {})
     host = hosts.get(role, {})
     return host.get("private_ip_address")
+
+
+@dataclass(frozen=True, slots=True)
+class MarkerNetwork:
+    """Top-level ``network:`` block in ``.otsinfra.yaml``.
+
+    Holds the per-environment Hetzner network identity used by
+    ``lots hcloud network ensure`` and consumed as a default by
+    ``lots hcloud server create``. Semantic validation of the CIDR /
+    zone is the caller's responsibility — this dataclass only enforces
+    that each field is a non-empty string.
+    """
+
+    name: str
+    ip_range: str
+    network_zone: str
+
+
+def get_network(marker: dict) -> MarkerNetwork | None:
+    """Return the top-level ``network:`` block as ``MarkerNetwork``.
+
+    Returns ``None`` when the block is absent (the caller decides
+    whether that's an error). Raises :class:`KeyError` when a required
+    key is missing and :class:`TypeError` when a value has the wrong
+    type — Python conventional split, so callers always see a
+    well-typed object or one of those two errors.
+    """
+    block = marker.get("network")
+    if block is None:
+        return None
+    if not isinstance(block, dict):
+        raise TypeError(f"'network' must be a mapping, got {type(block).__name__}: {block!r}")
+
+    def _require_str(key: str) -> str:
+        if key not in block:
+            raise KeyError(f"network.{key} is required but missing")
+        value = block[key]
+        if not isinstance(value, str) or not value:
+            raise TypeError(
+                f"network.{key} must be a non-empty str, got {type(value).__name__}: {value!r}"
+            )
+        return value
+
+    return MarkerNetwork(
+        name=_require_str("name"),
+        ip_range=_require_str("ip_range"),
+        network_zone=_require_str("network_zone"),
+    )
 
 
 def generate_gitignore() -> str:
