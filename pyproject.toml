@@ -17,7 +17,7 @@ classifiers = [
   "Programming Language :: Python :: 3.13",
   "Topic :: System :: Systems Administration",
 ]
-dependencies = ["cyclopts>=3.9"]
+dependencies = ["cyclopts>=3.9", "hcloud>=2.16.0"]
 
 [project.urls]
 Repository = "https://github.com/onetimesecret/rots"
