@@ -24,7 +24,25 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
+# Re-export error types so callers (and the test suite) can import them
+# from ots_shared.ssh.env alongside resolve_env_name. The canonical
+# definitions live in ots_shared.ssh.hostname; this is purely an
+# ergonomics re-export so a single import line covers env-name handling.
+# hostname.py imports nothing from this module, so no circular risk.
+from ots_shared.ssh.hostname import (
+    EnvNameConflict,
+    HostnameError,
+    MarkerEnvNameMissing,
+)
+
 logger = logging.getLogger(__name__)
+
+__all__ = (
+    "EnvNameConflict",
+    "HostnameError",
+    "MarkerEnvNameMissing",
+    "resolve_env_name",
+)
 
 MARKER_FILENAME = ".otsinfra.yaml"
 ENV_FILENAME = ".otsinfra.env"
@@ -168,15 +186,19 @@ def generate_marker(
 ) -> str:
     """Generate ``.otsinfra.yaml`` content.
 
-    Returns YAML text with ``environment`` and ``created`` fields,
-    plus any additional metadata key-value pairs.
+    Returns YAML text with ``env_name`` and ``created`` fields,
+    plus any additional metadata key-value pairs. The signature
+    parameter is still named ``environment`` for backward compatibility
+    with ``lots init`` / ``pots init`` callers — the field on disk is
+    written as ``env_name:`` per the issue #59 follow-on contract
+    (single source of truth for ``parse_hostname``'s env validation).
 
     When *hosts* is provided, a ``hosts:`` block is appended keyed by
     role (e.g. ``db``, ``web``) with nested attributes like
     ``private_ip_address``.
     """
     lines = [
-        f"environment: {_yaml_quote(environment)}",
+        f"env_name: {_yaml_quote(environment)}",
         f"created: '{date.today().isoformat()}'",
     ]
     for key, value in metadata.items():
@@ -228,6 +250,48 @@ def get_host_ip(marker: dict, role: str) -> str | None:
     hosts = marker.get("hosts", {})
     host = hosts.get(role, {})
     return host.get("private_ip_address")
+
+
+def resolve_env_name(marker: dict) -> str:
+    """Return the env name for the current shell, fail loud on conflict.
+
+    Precedence (Option C from the issue #59 follow-on contract):
+
+    * ``marker['env_name']`` AND ``$ENV_NAME`` set → MUST be equal;
+      mismatch raises :class:`ots_shared.ssh.hostname.EnvNameConflict`.
+    * Only ``marker['env_name']`` set → use it.
+    * Only ``$ENV_NAME`` set OR neither set → marker is required;
+      raise :class:`ots_shared.ssh.hostname.MarkerEnvNameMissing`.
+
+    The marker is the source of truth; ``$ENV_NAME`` is the
+    operator-supplied cross-check (typically set by direnv inside the
+    environment dir). This helper exists so every consumer agrees on
+    the precedence, instead of each CLI re-deriving it from
+    ``os.environ`` and ``Path.cwd().name``.
+    """
+    marker_value: str | None = None
+    if isinstance(marker, dict):
+        raw = marker.get("env_name")
+        if isinstance(raw, str) and raw:
+            marker_value = raw
+
+    env_value = os.environ.get("ENV_NAME") or None
+
+    if marker_value is None:
+        # The contract: marker is required (even when $ENV_NAME is set).
+        raise MarkerEnvNameMissing(
+            "marker has no 'env_name' field; add `env_name: <env>` to .otsinfra.yaml "
+            "(operators may also set $ENV_NAME, but the marker is the source of truth)"
+        )
+
+    if env_value is not None and env_value != marker_value:
+        raise EnvNameConflict(
+            f"$ENV_NAME={env_value!r} disagrees with marker env_name={marker_value!r}; "
+            "fix one or the other (the marker is the source of truth — adjust direnv "
+            "or rerun in the matching environment dir)"
+        )
+
+    return marker_value
 
 
 @dataclass(frozen=True, slots=True)

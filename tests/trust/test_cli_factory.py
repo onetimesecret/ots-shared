@@ -47,7 +47,7 @@ def _run_app(app: cyclopts.App, args: list[str]) -> object:
 def _seed_marker_only(tmp_path: Path) -> None:
     """Write ``.otsinfra.yaml`` so ``resolve_trust_dir`` succeeds but ``.trust/`` is absent."""
     (tmp_path / ".otsinfra.yaml").write_text(
-        "environment: test-cli-factory\ncreated: '2026-04-25'\n"
+        "env_name: test-cli-factory\ncreated: '2026-04-25'\n"
     )
 
 

@@ -113,7 +113,7 @@ def _seed_marker(target: Path) -> None:
     Keeps the test independent of the marker generator's exact output.
     """
     (target / ".otsinfra.yaml").write_text(
-        "environment: test-conc\n"
+        "env_name: test-conc\n"
         "created: '2026-04-25'\n"
         "hosts:\n"
         "  web:\n"

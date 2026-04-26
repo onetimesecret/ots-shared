@@ -33,7 +33,7 @@ def _run_app(app, args: list[str]) -> int | None:
 
 def _make_marker(target: Path) -> None:
     (target / ".otsinfra.yaml").write_text(
-        "environment: roundtrip\n"
+        "env_name: roundtrip\n"
         "created: '2026-04-25'\n"
         "hosts:\n"
         "  web:\n"

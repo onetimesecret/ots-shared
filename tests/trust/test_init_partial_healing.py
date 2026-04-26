@@ -21,7 +21,7 @@ from ots_shared.trust.init_step import create_trust_material
 
 def _make_marker(target: Path) -> None:
     (target / ".otsinfra.yaml").write_text(
-        "environment: test-partial\n"
+        "env_name: test-partial\n"
         "created: '2026-04-25'\n"
         "hosts:\n"
         "  web:\n"
