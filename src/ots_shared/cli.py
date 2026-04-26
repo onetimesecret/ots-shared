@@ -1,4 +1,4 @@
-# packages/ots-shared/src/ots_shared/cli.py
+# src/ots_shared/cli.py
 
 """Shared cyclopts type aliases for consistent CLI flags across OTS tools.
 

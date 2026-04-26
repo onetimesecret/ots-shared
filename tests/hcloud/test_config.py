@@ -1,4 +1,4 @@
-# packages/rots/packages/ots-shared/tests/hcloud/test_config.py
+# tests/hcloud/test_config.py
 
 """Tests for ots_shared.hcloud.config."""
 

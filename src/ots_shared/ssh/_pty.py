@@ -1,4 +1,4 @@
-# packages/ots-shared/src/ots_shared/ssh/_pty.py
+# src/ots_shared/ssh/_pty.py
 
 """PTY helper for interactive SSH sessions.
 

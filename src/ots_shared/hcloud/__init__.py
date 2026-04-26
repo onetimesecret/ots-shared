@@ -1,4 +1,4 @@
-# packages/ots-shared/src/ots_shared/hcloud/__init__.py
+# src/ots_shared/hcloud/__init__.py
 
 """Shared Hetzner Cloud library subset for OTS tools.
 

@@ -1,4 +1,4 @@
-# packages/ots-shared/tests/ssh/test_connection.py
+# tests/ssh/test_connection.py
 
 """Tests for ots_shared.ssh.connection module."""
 

@@ -1,4 +1,4 @@
-# packages/ots-shared/src/ots_shared/hcloud/zones.py
+# src/ots_shared/hcloud/zones.py
 
 """Hetzner Cloud network zone constants and location-to-zone mapping.
 

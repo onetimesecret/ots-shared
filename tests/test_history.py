@@ -1,4 +1,4 @@
-# packages/ots-shared/tests/test_history.py
+# tests/test_history.py
 
 """Tests for ots_shared.history — command logging and SQL serialization."""
 

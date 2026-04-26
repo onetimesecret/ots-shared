@@ -1,4 +1,4 @@
-# packages/ots-shared/src/ots_shared/ssh/__init__.py
+# src/ots_shared/ssh/__init__.py
 
 """SSH remote execution support for OTS operations tools.
 

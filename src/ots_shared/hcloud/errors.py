@@ -1,4 +1,4 @@
-# packages/ots-shared/src/ots_shared/hcloud/errors.py
+# src/ots_shared/hcloud/errors.py
 
 """Friendly error handling for hcloud API calls."""
 

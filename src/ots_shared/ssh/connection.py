@@ -1,4 +1,4 @@
-# packages/ots-shared/src/ots_shared/ssh/connection.py
+# src/ots_shared/ssh/connection.py
 
 """Paramiko SSHClient factory using ~/.ssh/config.
 

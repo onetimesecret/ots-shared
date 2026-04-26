@@ -1,4 +1,4 @@
-# packages/ots-shared/src/ots_shared/taxonomy.py
+# src/ots_shared/taxonomy.py
 
 """Canonical jurisdiction and environment vocabularies for OTS infrastructure.
 
