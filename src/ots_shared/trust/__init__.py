@@ -7,9 +7,12 @@ The CA, manifest, and fingerprint helpers are exported from their modules.
 
 from __future__ import annotations
 
+import contextlib
+import fcntl
 import getpass
 import os
 import socket
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -22,6 +25,63 @@ from .manifest import Manifest, ManifestEntry
 from .ssh import generate_ssh_keypair
 from .tls import generate_tls_leaf
 from .wg import generate_wg_keypair
+
+TRUST_DIRNAME = ".trust"
+
+
+class OtsInfraMarkerMissingError(RuntimeError):
+    """Raised when ``.otsinfra.yaml`` cannot be located via walk-up.
+
+    The marker anchors the operator checkout root; trust paths derive
+    from it. Callers translate this into their own user-facing error
+    (e.g. cli exit, render failure) with their own actionable message.
+    """
+
+
+def resolve_trust_dir(start: Path | None = None) -> Path:
+    """Locate ``.trust/`` anchored off the ``.otsinfra.yaml`` marker.
+
+    Walk-up discovery uses :func:`ots_shared.ssh.env.find_marker`. The
+    returned path is ``<marker_parent>/.trust/`` and may not exist on
+    disk — callers that need on-disk material check that themselves.
+
+    Raises :class:`OtsInfraMarkerMissingError` when no marker is found.
+    """
+    # Imported here to avoid a top-level cycle (ssh.env imports nothing
+    # from this module today, but keeping it lazy is cheap insurance).
+    from ots_shared.ssh.env import find_marker
+
+    marker = find_marker(start)
+    if marker is None:
+        raise OtsInfraMarkerMissingError(
+            "no .otsinfra.yaml marker found via walk-up; "
+            "run from inside an OTS environment checkout"
+        )
+    return marker.parent / TRUST_DIRNAME
+
+
+@contextlib.contextmanager
+def trust_flock(target: Path) -> Iterator[None]:
+    """Hold an exclusive blocking flock for the ``.trust/`` generation path.
+
+    Spec §77: a flock guards generation so two simultaneous invocations from
+    the same checkout converge on a single trust state (AC #5). The lock
+    target is the operator-checkout directory ``target`` itself — it is
+    stable, pre-existing, and lives *outside* ``.trust/``. Locking on
+    ``.trust/`` directly would break under ``--force``: ``rmtree(.trust)``
+    would unlink the lock target's inode while a concurrent caller holds
+    the original fd, after which a second ``open(.trust)`` would resolve
+    to a fresh inode and the two processes would proceed in parallel.
+    """
+    fd = os.open(target, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+    finally:
+        os.close(fd)
 
 KeyType = Literal["ssh", "wg", "tls"]
 
@@ -123,12 +183,16 @@ __all__ = [
     "Keypair",
     "Manifest",
     "ManifestEntry",
+    "OtsInfraMarkerMissingError",
+    "TRUST_DIRNAME",
     "compute_fingerprint",
     "generate_ca",
     "generate_keypair",
     "load_ca",
     "next_serial",
     "reset_serial",
+    "resolve_trust_dir",
+    "trust_flock",
 ]
 
 

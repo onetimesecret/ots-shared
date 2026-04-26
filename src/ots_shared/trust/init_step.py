@@ -10,14 +10,10 @@ material only, and stable fingerprint output.
 
 from __future__ import annotations
 
-import contextlib
-import fcntl
-import os
 import shutil
-from collections.abc import Iterator
 from pathlib import Path
 
-from . import generate_keypair, make_manifest_entry
+from . import TRUST_DIRNAME, generate_keypair, make_manifest_entry, trust_flock
 from ._paths import (
     DIR_MODE,
     PUBLIC_MODE,
@@ -30,8 +26,6 @@ from ._paths import (
 )
 from .ca import generate_ca, next_serial
 from .manifest import Manifest
-
-TRUST_DIRNAME = ".trust"
 
 _TRUST_GITIGNORE = """\
 # Cleartext private halves never enter version control.
@@ -48,31 +42,6 @@ _TRUST_GITIGNORE = """\
 !hosts/*/
 !socks/
 """
-
-
-@contextlib.contextmanager
-def _trust_flock(target: Path) -> Iterator[None]:
-    """Hold an exclusive blocking flock for the ``.trust/`` generation path.
-
-    Spec §77: a flock guards generation so two simultaneous invocations from
-    the same checkout converge on a single trust state (AC #5). The lock
-    target is the operator-checkout directory ``target`` itself — it is
-    stable, pre-existing (init() validates it before calling), and lives
-    *outside* ``.trust/``. Locking on ``.trust/`` directly would break under
-    ``--force``: ``rmtree(.trust)`` would unlink the lock target's inode
-    while a concurrent caller holds the original fd, after which a second
-    ``open(.trust)`` would resolve to a fresh inode and the two processes
-    would proceed in parallel.
-    """
-    fd = os.open(target, os.O_RDONLY | os.O_DIRECTORY)
-    try:
-        fcntl.flock(fd, fcntl.LOCK_EX)
-        try:
-            yield
-        finally:
-            fcntl.flock(fd, fcntl.LOCK_UN)
-    finally:
-        os.close(fd)
 
 
 def _write_trust_gitignore(trust_root: Path) -> None:
@@ -113,7 +82,7 @@ def create_trust_material(
     """
     trust_root = trust_dir(target / TRUST_DIRNAME)
 
-    with _trust_flock(target):
+    with trust_flock(target):
         if force and trust_root.exists():
             # Explicit destruction notice (spec §7) before any irreversible
             # action. Inside the flock so a concurrent --force run cannot
