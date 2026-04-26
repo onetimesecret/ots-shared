@@ -379,6 +379,9 @@ def load_cloud_init_user_data(
         source = f"file: {path}"
     elif cmd is not None:
         print(f"Running cloud-init command: {cmd}", file=sys.stderr)
+        # cmd is operator-supplied via --cloud-init-cmd; shell=True is
+        # intentional so callers can use pipes/redirection (e.g.
+        # `cat foo.yaml | envsubst`). Not a remote-attack surface.
         proc = subprocess.run(
             cmd,
             shell=True,  # noqa: S602
@@ -400,7 +403,16 @@ def load_cloud_init_user_data(
     raw_size = len(raw_bytes)
 
     if gzip_compress:
+        logger.warning(
+            "gzip_compress is experimental and is expected to break cloud-init "
+            "on Hetzner: user_data is round-tripped as a UTF-8 string, which "
+            "corrupts gzip bytes >=0x80. Only enable for providers that "
+            "preserve raw bytes through the metadata service."
+        )
         compressed = gzip.compress(raw_bytes)
+        # latin-1 is the byte-preserving codec for str-typed APIs; it
+        # survives provider round-trips iff no UTF-8 re-encoding happens
+        # in transit (Hetzner does re-encode — see warning above).
         user_data = compressed.decode("latin-1")
         payload_size = len(compressed)
         print(
