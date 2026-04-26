@@ -24,7 +24,7 @@ from ._paths import (
     manifest_path,
     trust_dir,
 )
-from .ca import generate_ca, next_serial
+from .ca import generate_ca
 from .manifest import Manifest
 
 _TRUST_GITIGNORE = """\
@@ -93,13 +93,18 @@ def create_trust_material(
         trust_root.chmod(DIR_MODE)
 
         ca_path = ca_dir(trust_root)
-        ca_existed = (ca_path / "ca.crt").exists() and (ca_path / "ca.key").exists()
         ca = generate_ca(ca_path, days=ca_days)
         ensure_dir(hosts_dir(trust_root))
 
         manifest = Manifest.load(manifest_path(trust_root))
 
-        if not ca_existed:
+        # Reconcile manifest against the CA actually on disk. File-presence
+        # is a poor proxy for "manifest already records this CA": if the
+        # serial counter is missing while ca.crt + ca.key remain, generate_ca
+        # mints a fresh identity (new fingerprint), and a presence-only
+        # check would leave the manifest pointing at the stale fingerprint.
+        ca_entry = manifest.get("ca", "ca")
+        if ca_entry is None or ca_entry.fingerprint != ca.fingerprint:
             manifest.upsert(
                 make_manifest_entry(
                     name="ca",
@@ -126,19 +131,16 @@ def create_trust_material(
                 print(f"{role} ssh {kp.fingerprint}")
 
             if not _wg_files_present(role_dir):
-                # Spec §113: WG inherits the per-CA serial counter for
-                # timeline accounting; WG has no native serial concept.
-                # Wave 1 ``generate_keypair`` ignores ``ca=`` for wg (see
-                # ``test_wg_ignores_ca_param``), so the orchestrator allocates
-                # the timeline serial directly via ``next_serial(ca)``.
-                kp = generate_keypair("wg", role, role_dir)
-                wg_serial = next_serial(ca)
+                # WG inherits the per-CA serial counter for §113 timeline
+                # accounting; ``generate_keypair`` owns the bump when ``ca=``
+                # is passed (idempotent: only bumps for a fresh mint).
+                kp = generate_keypair("wg", role, role_dir, ca=ca)
                 manifest.upsert(
                     make_manifest_entry(
                         name=role,
                         key_type="wg",
                         fingerprint=kp.fingerprint,
-                        serial=wg_serial,
+                        serial=kp.serial or 0,
                     )
                 )
                 print(f"{role} wg {kp.fingerprint}")

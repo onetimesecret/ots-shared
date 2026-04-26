@@ -50,18 +50,96 @@ def test_ssh_ignores_ca_param(trust_dir: Path, ca: CA) -> None:
         assert not (out_a / stray).exists(), f"ssh + ca must not write {stray}"
 
 
-def test_wg_ignores_ca_param(trust_dir: Path, ca: CA) -> None:
-    """§3: passing ca= to wg keytype produces the same artifacts as omitting it."""
-    out_a = trust_dir / "hosts" / "wg-with-ca"
-    out_b = trust_dir / "hosts" / "wg-without-ca"
+def test_wg_consumes_ca_serial_when_provided(trust_dir: Path, ca: CA) -> None:
+    """§113: wg with ca= bumps the per-CA serial on a fresh mint and surfaces it.
 
-    generate_keypair("wg", "host-a", out_a, ca=ca)
-    generate_keypair("wg", "host-b", out_b)
+    Pins Contract 2 of PR #2: ``generate_keypair("wg", role, out, ca=ca)`` is
+    canonical. The primitive owns the bump (orchestrator no longer calls
+    ``next_serial`` for wg directly). On idempotent re-load the counter must
+    NOT advance and ``Keypair.serial`` is None.
+    """
+    from ots_shared.trust.ca import next_serial, reset_serial
 
-    assert (out_a / "wg").exists() and (out_a / "wg.pub").exists()
-    assert (out_b / "wg").exists() and (out_b / "wg.pub").exists()
+    # Reset serial so the first wg fresh mint allocates a known number.
+    reset_serial(ca)
+    serial_file = ca.serial_path
+
+    # ---- with ca= on a fresh mint: serial advances by exactly 1 ------------
+    out_with = trust_dir / "hosts" / "wg-with-ca"
+    kp_with = generate_keypair("wg", "host-a", out_with, ca=ca)
+
+    assert (out_with / "wg").exists() and (out_with / "wg.pub").exists()
+    # WG primitive must NOT emit any TLS leaf artefacts even when ca= is passed.
     for stray in ("cert.pem", "key.pem"):
-        assert not (out_a / stray).exists(), f"wg + ca must not write {stray}"
+        assert not (out_with / stray).exists(), f"wg + ca must not write {stray}"
+
+    assert kp_with.serial is not None and kp_with.serial >= 1, (
+        f"wg with ca= must surface a positive serial; got {kp_with.serial!r}"
+    )
+    # Serial counter advanced by exactly one. We reset to 0; first allocation
+    # returned 1 and the on-disk counter now reads "1\n".
+    assert serial_file.read_text().strip() == str(kp_with.serial)
+
+    # ---- without ca=: no serial allocation, serial file unchanged ---------
+    counter_before_no_ca = serial_file.read_text()
+    out_without = trust_dir / "hosts" / "wg-without-ca"
+    kp_without = generate_keypair("wg", "host-b", out_without)
+
+    assert (out_without / "wg").exists() and (out_without / "wg.pub").exists()
+    assert kp_without.serial is None, (
+        f"wg without ca= must leave serial unset; got {kp_without.serial!r}"
+    )
+    assert serial_file.read_text() == counter_before_no_ca, (
+        "wg without ca= must not touch the per-CA serial counter"
+    )
+
+    # ---- idempotent re-call with ca=: no bump, serial is None -------------
+    counter_before_recall = serial_file.read_text()
+    kp_recall = generate_keypair("wg", "host-a", out_with, ca=ca)
+
+    # Same fingerprint as the first mint (idempotent re-load).
+    assert kp_recall.fingerprint == kp_with.fingerprint
+    # Critical: no fresh mint, so no serial bump and serial is None.
+    assert kp_recall.serial is None, (
+        f"idempotent wg re-load with ca= must not allocate a serial; got {kp_recall.serial!r}"
+    )
+    assert serial_file.read_text() == counter_before_recall, (
+        "idempotent wg re-load must not touch the per-CA serial counter; "
+        f"counter changed from {counter_before_recall!r}"
+    )
+
+    # Sanity that the serial we read above matches the canonical accessor.
+    # ``next_serial`` advances, so peek-then-restore by comparing values.
+    peeked = next_serial(ca)
+    assert peeked == kp_with.serial + 1, (
+        f"after the run, next allocation should be {kp_with.serial + 1}, got {peeked}"
+    )
+
+
+# ---- Contract 3 — generate_keypair rejects user / hostname kwargs ----------
+
+
+def test_generate_keypair_rejects_user_kwarg(trust_dir: Path) -> None:
+    """``generate_keypair`` no longer accepts ``user=``; calling with it raises TypeError.
+
+    Pins PR #2 Contract 3: ``user`` / ``hostname`` only belong on
+    ``make_manifest_entry``. Passing them through ``generate_keypair`` was
+    misleading (it was unused) and is now rejected at the call site.
+    """
+    out = trust_dir / "hosts" / "no-user-kwarg"
+    with pytest.raises(TypeError):
+        # type: ignore[call-arg]  -- intentionally wrong shape for the test
+        generate_keypair("ssh", "host-a", out, user="x")  # type: ignore[call-arg]
+
+
+def test_generate_keypair_rejects_hostname_kwarg(trust_dir: Path) -> None:
+    """``generate_keypair`` no longer accepts ``hostname=``; calling raises TypeError.
+
+    Pins PR #2 Contract 3 (sibling of ``user=``).
+    """
+    out = trust_dir / "hosts" / "no-hostname-kwarg"
+    with pytest.raises(TypeError):
+        generate_keypair("ssh", "host-a", out, hostname="h")  # type: ignore[call-arg]
 
 
 def test_tls_requires_ca(trust_dir: Path) -> None:

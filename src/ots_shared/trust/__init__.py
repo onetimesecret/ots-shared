@@ -117,8 +117,6 @@ def generate_keypair(
     *,
     ca: CA | None = None,
     leaf_days: int = 730,
-    user: str | None = None,
-    hostname: str | None = None,
 ) -> Keypair:
     if key_type == "tls" and ca is None:
         raise ValueError("ca is required for key_type='tls'")
@@ -134,9 +132,10 @@ def generate_keypair(
         # by ignoring the parameter even when supplied.
     elif key_type == "wg":
         # Spec §113: WG inherits the per-CA serial for timeline accounting.
-        # Bump only when minting fresh material; idempotent re-load must not
-        # consume a serial. Pre-flight existence check before the keypair
-        # call decides whether this run is a fresh mint or a no-op load.
+        # ``generate_keypair`` owns the bump when ``ca=`` is supplied — pass
+        # it from the orchestrator, do not re-allocate there. Idempotent:
+        # the pre-flight existence check guarantees that a re-load run does
+        # not consume a serial, only a fresh mint does.
         wg_priv_path = out_dir / "wg"
         wg_pub_path = out_dir / "wg.pub"
         wg_freshly_minted = not (wg_priv_path.exists() and wg_pub_path.exists())
@@ -161,11 +160,6 @@ def generate_keypair(
         serial = issued_serial if issued_serial else None
     else:
         raise ValueError(f"Unknown key_type: {key_type}")
-
-    # Caller-side metadata — manifest writes are the orchestrator's responsibility,
-    # but we surface user/hostname here so the orchestrator can stamp entries
-    # without re-resolving in two places.
-    _ = (_resolve_user(user), _resolve_hostname(hostname))
 
     return Keypair(
         name=name,
