@@ -144,9 +144,7 @@ def create_trust_material(
                 print(f"{role} wg {kp.fingerprint}")
 
             if not _tls_files_present(role_dir):
-                kp = generate_keypair(
-                    "tls", role, role_dir, ca=ca, leaf_days=leaf_days
-                )
+                kp = generate_keypair("tls", role, role_dir, ca=ca, leaf_days=leaf_days)
                 manifest.upsert(
                     make_manifest_entry(
                         name=role,

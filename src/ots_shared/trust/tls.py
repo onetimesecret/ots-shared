@@ -35,9 +35,7 @@ def _build_leaf(
 ) -> x509.Certificate:
     now = datetime.now(UTC)
     subject = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, name)])
-    san = x509.SubjectAlternativeName(
-        [x509.DNSName(name), x509.DNSName(f"{name}.local")]
-    )
+    san = x509.SubjectAlternativeName([x509.DNSName(name), x509.DNSName(f"{name}.local")])
     builder = (
         x509.CertificateBuilder()
         .subject_name(subject)

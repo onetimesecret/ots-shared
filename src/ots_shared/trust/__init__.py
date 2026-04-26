@@ -83,6 +83,7 @@ def trust_flock(target: Path) -> Iterator[None]:
     finally:
         os.close(fd)
 
+
 KeyType = Literal["ssh", "wg", "tls"]
 
 
@@ -197,6 +198,7 @@ __all__ = [
 
 
 # Builders that need the resolved identity (used by orchestrators) ----------
+
 
 def make_manifest_entry(
     *,

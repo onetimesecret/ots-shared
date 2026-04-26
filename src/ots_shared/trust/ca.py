@@ -37,13 +37,9 @@ def _spki_bytes(public_key: ed25519.Ed25519PublicKey) -> bytes:
     )
 
 
-def _build_self_signed(
-    private_key: ed25519.Ed25519PrivateKey, days: int
-) -> x509.Certificate:
+def _build_self_signed(private_key: ed25519.Ed25519PrivateKey, days: int) -> x509.Certificate:
     now = datetime.now(UTC)
-    subject = issuer = x509.Name(
-        [x509.NameAttribute(NameOID.COMMON_NAME, _CA_CN)]
-    )
+    subject = issuer = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, _CA_CN)])
     builder = (
         x509.CertificateBuilder()
         .subject_name(subject)
@@ -52,9 +48,7 @@ def _build_self_signed(
         .serial_number(1)
         .not_valid_before(now - timedelta(minutes=1))
         .not_valid_after(now + timedelta(days=days))
-        .add_extension(
-            x509.BasicConstraints(ca=True, path_length=0), critical=True
-        )
+        .add_extension(x509.BasicConstraints(ca=True, path_length=0), critical=True)
         .add_extension(
             x509.KeyUsage(
                 digital_signature=False,
