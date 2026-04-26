@@ -14,28 +14,18 @@ from collections.abc import Callable, Iterable
 
 import pytest
 
-# Skip the whole module cleanly while production code is in flight.
-# The hostname module is wholly new; the env-side error types are also new.
-# A single try/except catches both "module missing" and "symbol not yet exported".
-try:
-    from ots_shared.ssh.hostname import (
-        HostnameEmptyEnv,
-        HostnameEnvMismatch,
-        HostnameError,
-        HostnameNoRoleMatch,
-        ParsedHostname,
-        parse_hostname,
-    )
-
-    from ots_shared.ssh.env import (
-        EnvNameConflict,
-        MarkerEnvNameMissing,
-    )
-except ImportError as exc:
-    pytest.skip(
-        f"hostname parser / env-name error types not yet implemented: {exc}",
-        allow_module_level=True,
-    )
+from ots_shared.ssh.env import (
+    EnvNameConflict,
+    MarkerEnvNameMissing,
+)
+from ots_shared.ssh.hostname import (
+    HostnameEmptyEnv,
+    HostnameEnvMismatch,
+    HostnameError,
+    HostnameNoRoleMatch,
+    ParsedHostname,
+    parse_hostname,
+)
 
 
 @pytest.fixture(autouse=True)

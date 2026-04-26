@@ -149,7 +149,7 @@ def parse_hostname(hostname: str, marker: dict[str, Any]) -> ParsedHostname:
         # Either the input had a leading/trailing/double hyphen.
         raise HostnameError(
             f"hostname {hostname!r} has empty hyphen-separated segments; "
-            "expected <env>-<role>-<ordinal>"
+            "expected <env>-<role>[-<ordinal>]"
         )
 
     # 1. Ordinal: trailing pure-digit segment, or default "01".

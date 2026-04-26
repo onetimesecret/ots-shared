@@ -13,20 +13,11 @@ from __future__ import annotations
 
 import pytest
 
-# Guard so the suite stays green if production code hasn't landed yet.
-# The env module itself exists already; we need to skip when the new symbols
-# (resolve_env_name + the new error types) haven't been added.
-try:
-    from ots_shared.ssh.env import (
-        EnvNameConflict,
-        MarkerEnvNameMissing,
-        resolve_env_name,
-    )
-except ImportError as exc:
-    pytest.skip(
-        f"resolve_env_name / typed errors not yet in ots_shared.ssh.env: {exc}",
-        allow_module_level=True,
-    )
+from ots_shared.ssh.env import (
+    EnvNameConflict,
+    MarkerEnvNameMissing,
+    resolve_env_name,
+)
 
 
 def test_marker_only_returns_marker_value(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -68,7 +59,7 @@ def test_neither_set_raises_missing(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_marker_none_raises_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("ENV_NAME", raising=False)
     with pytest.raises(MarkerEnvNameMissing):
-        resolve_env_name(None)  # type: ignore[arg-type]
+        resolve_env_name(None)
 
 
 def test_marker_empty_dict_raises_missing(monkeypatch: pytest.MonkeyPatch) -> None:

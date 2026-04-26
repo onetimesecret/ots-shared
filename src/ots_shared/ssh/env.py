@@ -20,9 +20,11 @@ from __future__ import annotations
 import logging
 import os
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
+from typing import Any
 
 # Re-export error types so callers (and the test suite) can import them
 # from ots_shared.ssh.env alongside resolve_env_name. The canonical
@@ -252,7 +254,7 @@ def get_host_ip(marker: dict, role: str) -> str | None:
     return host.get("private_ip_address")
 
 
-def resolve_env_name(marker: dict) -> str:
+def resolve_env_name(marker: Mapping[str, Any] | None) -> str:
     """Return the env name for the current shell, fail loud on conflict.
 
     Precedence (Option C from the issue #59 follow-on contract):
@@ -268,9 +270,14 @@ def resolve_env_name(marker: dict) -> str:
     environment dir). This helper exists so every consumer agrees on
     the precedence, instead of each CLI re-deriving it from
     ``os.environ`` and ``Path.cwd().name``.
+
+    *marker* is typed permissively (``Mapping[str, Any] | None``) because
+    callers pass in raw YAML loads — anything from a missing file
+    (``None``) to a malformed scalar — and the function must coerce that
+    to a typed error rather than a TypeError.
     """
     marker_value: str | None = None
-    if isinstance(marker, dict):
+    if isinstance(marker, Mapping):
         raw = marker.get("env_name")
         if isinstance(raw, str) and raw:
             marker_value = raw

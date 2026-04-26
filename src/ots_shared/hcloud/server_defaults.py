@@ -172,8 +172,11 @@ def resolve_host_defaults(role: str | None, name: str) -> HostDefaults | None:
     """Resolve server create defaults from .otsinfra.yaml.
 
     Picks a host role either from an explicit ``role`` argument or — when
-    unset — by tokenizing *name* on ``-`` and matching tokens against the
-    marker's host keys.
+    unset — by delegating to :func:`ots_shared.ssh.hostname.parse_hostname`,
+    the canonical parser shared with ``lots deploy``, ``lots provision``,
+    and ``lots confext push``. The parser infers the role by suffix match
+    against configured host role names; if more than one suffix matches,
+    the longest matching suffix wins deterministically.
 
     Returns ``None`` when no marker file is found on disk (i.e. the
     project has opted out of marker-backed defaults entirely).
@@ -181,7 +184,9 @@ def resolve_host_defaults(role: str | None, name: str) -> HostDefaults | None:
     Raises ``SystemExit`` — with distinct messages — when:
       * the marker exists but has no ``hosts`` block,
       * an explicit ``--role`` does not match any entry,
-      * auto-match finds zero or multiple role tokens in ``name``,
+      * the parser raises any :class:`ots_shared.ssh.hostname.HostnameError`
+        (e.g. no suffix of *name* matches a configured role, or the env
+        prefix mismatches ``marker['env_name']``),
       * a value under ``hosts.<role>`` has the wrong type (known key),
       * ``hosts.<role>`` contains a scalar/list-valued key not in
         :data:`MARKER_HOST_FIELDS` (dict-valued keys are silently ignored
