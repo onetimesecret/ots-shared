@@ -287,6 +287,21 @@ def generate_gitignore() -> str:
         "gitrepo/",
         "history.db",
         "",
+        "# .trust/ — cleartext private halves never enter version control.",
+        "# Only the age-sealed (*.age) form and public material are committable.",
+        ".trust/**/*.key",
+        ".trust/**/key.pem",
+        ".trust/**/ssh",
+        ".trust/**/wg",
+        ".trust/ca/ca.key",
+        ".trust/ca/serial",
+        "!.trust/**/*.age",
+        "!.trust/**/*.pub",
+        "!.trust/**/*.crt",
+        "!.trust/**/cert.pem",
+        "!.trust/manifest.yaml",
+        "!.trust/.gitignore",
+        "",
     ]
     return "\n".join(lines)
 

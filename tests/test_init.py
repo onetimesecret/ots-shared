@@ -46,12 +46,16 @@ class TestInitCreatesFiles:
 class TestInitOverwriteBehavior:
     """Marker file overwrite and --force flag."""
 
-    def test_refuses_overwrite_without_force(self, tmp_path):
+    def test_existing_marker_without_force_is_preserved(self, tmp_path):
+        """Spec §6 / AC #2: an existing marker is the re-run path, not a failure.
+        The marker stays untouched but init() proceeds through the extension
+        loop so trust material can be materialized incrementally.
+        """
         marker = tmp_path / MARKER_FILENAME
         marker.write_text("existing\n")
         with pytest.raises(SystemExit) as exc_info:
             app(["eu2", "--directory", str(tmp_path)])
-        assert exc_info.value.code == 1
+        assert exc_info.value.code is None or exc_info.value.code == 0
         assert marker.read_text() == "existing\n"
 
     def test_force_overwrites_marker(self, tmp_path):
@@ -104,16 +108,25 @@ class TestInitErrorCases:
 class TestInitDefaultEnvironmentFallback:
     """Edge case: environment falls back to 'default' when directory name is empty."""
 
+    @patch("ots_shared.init.create_trust_material")
+    @patch("ots_shared.init.load_marker")
     @patch("ots_shared.init.create_envrc_template")
     @patch("ots_shared.init.create_gitignore")
     @patch("ots_shared.init.create_marker")
     def test_root_path_uses_default_as_environment_name(
-        self, mock_create_marker, mock_create_gitignore, mock_create_envrc_template
+        self,
+        mock_create_marker,
+        mock_create_gitignore,
+        mock_create_envrc_template,
+        mock_load_marker,
+        mock_create_trust_material,
     ):
         """Path('/').resolve().name is '', so environment should fall back to 'default'."""
         mock_create_marker.return_value = Path("/.otsinfra.yaml")
         mock_create_gitignore.return_value = Path("/.gitignore")
         mock_create_envrc_template.return_value = Path("/.envrc")
+        mock_load_marker.return_value = {}
+        mock_create_trust_material.return_value = Path("/.trust")
 
         init(directory=Path("/"))
 
