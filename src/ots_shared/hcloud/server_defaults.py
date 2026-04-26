@@ -2,9 +2,11 @@
 
 """Library helpers for resolving Hetzner server defaults from .otsinfra.yaml.
 
-This is the I/O-agnostic library subset of what used to live under
-``lots.hcloud.commands.server._helpers``. CLI-specific output helpers
-(``print_*``) remain in lots.
+The library subset of what used to live under
+``lots.hcloud.commands.server._helpers``. CLI presentation helpers
+(``print_*``) remain in lots. Diagnostic messages from
+``load_cloud_init_user_data`` go to ``stderr`` so stdout stays clean
+for ``--json`` callers.
 """
 
 from __future__ import annotations
@@ -376,7 +378,7 @@ def load_cloud_init_user_data(
         content = path.read_text()
         source = f"file: {path}"
     elif cmd is not None:
-        print(f"Running cloud-init command: {cmd}")
+        print(f"Running cloud-init command: {cmd}", file=sys.stderr)
         proc = subprocess.run(
             cmd,
             shell=True,  # noqa: S602
