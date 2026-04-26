@@ -72,6 +72,7 @@ def log_command(
             ),
         )
         conn.commit()
+        assert cur.lastrowid is not None  # INSERT always sets it
         return cur.lastrowid
     finally:
         conn.close()

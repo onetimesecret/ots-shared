@@ -379,6 +379,7 @@ class SSHExecutor:
             safe_cmd = f"sudo -- {safe_cmd}"
         logger.debug("ssh stream: %s", safe_cmd)
         transport = self._client.get_transport()
+        assert transport is not None, "SSH transport unavailable; client must be connected"
         channel = transport.open_session()
         channel.setblocking(0)
         if timeout is not None:
@@ -447,6 +448,7 @@ class SSHExecutor:
         logger.debug("ssh interactive: %s", safe_cmd)
 
         transport = self._client.get_transport()
+        assert transport is not None, "SSH transport unavailable; client must be connected"
         channel = transport.open_session()
 
         # Request PTY with current terminal dimensions

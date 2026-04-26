@@ -2,7 +2,7 @@
 name = "ots-shared"
 version = "0.4.0"
 description = "Shared constants and utilities for OTS operations tools"
-readme = {text = "Shared constants and utilities for OTS operations tools.", content-type = "text/plain"}
+readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 authors = [{ name = "Onetime" }]
@@ -17,15 +17,16 @@ classifiers = [
   "Programming Language :: Python :: 3.13",
   "Topic :: System :: Systems Administration",
 ]
-dependencies = ["cyclopts>=3.9", "hcloud>=2.16.0"]
+dependencies = ["cyclopts>=3.9", "hcloud>=2.16.0", "pyyaml>=6.0"]
 
 [project.urls]
-Repository = "https://github.com/onetimesecret/rots"
+Repository = "https://github.com/onetimesecret/ots-shared"
+Issues = "https://github.com/onetimesecret/ots-shared/issues"
 
 [project.optional-dependencies]
 ssh = ["paramiko>=3.4"]
-dev = ["pyright>=1.1.390"]
-test = ["pytest>=8.0", "pytest-mock>=3.14"]
+dev = ["pyright>=1.1.390", "ruff>=0.7"]
+test = ["pytest>=8.0", "pytest-mock>=3.14", "pytest-cov>=5.0"]
 
 [build-system]
 requires = ["hatchling"]
