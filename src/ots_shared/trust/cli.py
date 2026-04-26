@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Annotated
 
 import cyclopts
+
 from ots_shared.ssh.env import find_marker, load_marker
 from ots_shared.trust import (
     OtsInfraMarkerMissingError,
