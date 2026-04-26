@@ -93,18 +93,24 @@ class TestFormatTraffic:
 FAKE_MARKER = Path("/tmp/fake/.otsinfra.yaml")
 
 
-def _patched(hosts: dict | None, *, marker_missing: bool = False):
+def _patched(hosts: dict | None, *, marker_missing: bool = False, env_name: str = "test"):
     """Patch find_marker/load_marker as if the given hosts block was on disk.
 
     ``marker_missing=True`` simulates no marker file found (find_marker -> None).
     ``hosts=None`` simulates a marker file present but no 'hosts' key.
     Otherwise ``hosts`` is placed under a top-level ``hosts`` key.
+
+    The marker always carries a synthetic ``env_name`` (default ``"test"``) so
+    the canonical hostname parser passes its env-name validation. Tests that
+    drive auto-match must use a hostname whose prefix equals ``env_name``.
     """
     if marker_missing:
         find = patch("ots_shared.ssh.env.find_marker", return_value=None)
         load = patch("ots_shared.ssh.env.load_marker", return_value={})
     else:
-        marker = {} if hosts is None else {"hosts": hosts}
+        marker: dict = {"env_name": env_name}
+        if hosts is not None:
+            marker["hosts"] = hosts
         find = patch("ots_shared.ssh.env.find_marker", return_value=FAKE_MARKER)
         load = patch("ots_shared.ssh.env.load_marker", return_value=marker)
     return find, load
@@ -142,14 +148,24 @@ class TestResolveHostDefaultsFailLoud:
     def test_auto_match_zero_matches_raises(self):
         find, load = _patched({"web": {"server_type": "cx11"}})
         with find, load:
-            with pytest.raises(SystemExit, match="does not match any role"):
-                resolve_host_defaults(role=None, name="foo-bar")
+            # New canonical parser: error wording is "matches no role" (parser
+            # phrasing) carried through to the SystemExit message.
+            with pytest.raises(SystemExit, match="matches no role"):
+                resolve_host_defaults(role=None, name="test-foo-bar")
 
-    def test_auto_match_multiple_matches_raises(self):
-        find, load = _patched({"web": {"server_type": "cx11"}, "prod": {"server_type": "cx22"}})
+    def test_auto_match_longest_suffix_wins(self):
+        # Under the canonical parser the auto-match is *not* ambiguous —
+        # the longest-suffix that matches a hosts key wins deterministically.
+        # ``test-prod-web-01`` against ``{web, prod-web}`` resolves to
+        # ``prod-web`` (longer suffix) instead of ``web``.
+        find, load = _patched(
+            {"web": {"server_type": "cx11"}, "prod-web": {"server_type": "cx22"}}
+        )
         with find, load:
-            with pytest.raises(SystemExit, match="matches multiple roles"):
-                resolve_host_defaults(role=None, name="web-prod-01")
+            result = resolve_host_defaults(role=None, name="test-prod-web-01")
+        assert result is not None
+        assert result.role == "prod-web"
+        assert result.get("server_type") == "cx22"
 
     def test_unknown_scalar_key_raises_with_allowed_list(self):
         # Typo: `server-type` (hyphen) vs `server_type` (underscore). This
@@ -157,7 +173,7 @@ class TestResolveHostDefaultsFailLoud:
         find, load = _patched({"web": {"server-type": "cx11"}})
         with find, load:
             with pytest.raises(SystemExit, match="unknown key") as excinfo:
-                resolve_host_defaults(role=None, name="web-01")
+                resolve_host_defaults(role=None, name="test-web-01")
         # Error should enumerate the allowed keys so the user can spot the fix.
         assert "server_type" in str(excinfo.value)
 
@@ -187,7 +203,7 @@ class TestResolveHostDefaultsFailLoud:
         find, load = _patched({"web": {"server_type": ["cx11"]}})
         with find, load:
             with pytest.raises(SystemExit, match="server_type.*must be str"):
-                resolve_host_defaults(role=None, name="web-01")
+                resolve_host_defaults(role=None, name="test-web-01")
 
     def test_type_mismatch_int_under_bool_field(self):
         # bool is a subclass of int in Python — but a YAML `1` under a bool
@@ -196,13 +212,13 @@ class TestResolveHostDefaultsFailLoud:
         find, load = _patched({"web": {"backup": 1}})
         with find, load:
             with pytest.raises(SystemExit, match="backup.*must be bool"):
-                resolve_host_defaults(role=None, name="web-01")
+                resolve_host_defaults(role=None, name="test-web-01")
 
     def test_error_message_cites_file_role_key(self):
         find, load = _patched({"web": {"server_type": 42}})
         with find, load:
             with pytest.raises(SystemExit) as excinfo:
-                resolve_host_defaults(role=None, name="web-01")
+                resolve_host_defaults(role=None, name="test-web-01")
         msg = str(excinfo.value)
         # file path, role, key, flag, expected type, got type all present
         assert str(FAKE_MARKER) in msg
@@ -307,7 +323,7 @@ class TestResolveHostDefaultsRoleMatching:
     def test_auto_match_single(self):
         find, load = _patched({"web": {"server_type": "cx11"}})
         with find, load:
-            result = resolve_host_defaults(role=None, name="web-prod-01")
+            result = resolve_host_defaults(role=None, name="test-web-01")
         assert result is not None
         assert result.role == "web"
 
@@ -375,12 +391,17 @@ PROFILES_FIXTURE = {
 
 
 class TestProfilesFixtureResolution:
+    # When --role is supplied the parser is bypassed (explicit wins), so
+    # the env_name pinned in the patched marker is irrelevant for these
+    # cases. Kept at "profiles" so the synthetic marker still resembles
+    # the real examples/environment/.otsinfra.yaml shape.
+
     def test_web_role_pulls_four_str_defaults(self):
         # Resolve `web` and assert the 4 str per-host marker fields
         # come through. Network name is no longer per-host — it lives
         # in the top-level `network:` block (read separately via
         # marker_network_name()).
-        find, load = _patched(PROFILES_FIXTURE)
+        find, load = _patched(PROFILES_FIXTURE, env_name="profiles")
         with find, load:
             result = resolve_host_defaults(role="web", name="profiles-web-01")
         assert result is not None
@@ -391,7 +412,7 @@ class TestProfilesFixtureResolution:
         assert result.get("private_ip_address") == "10.0.0.21"
 
     def test_web_role_omits_foreign_tool_sections(self):
-        find, load = _patched(PROFILES_FIXTURE)
+        find, load = _patched(PROFILES_FIXTURE, env_name="profiles")
         with find, load:
             result = resolve_host_defaults(role="web", name="profiles-web-01")
         assert result is not None
@@ -408,7 +429,7 @@ class TestProfilesFixtureResolution:
         # resolver seeds it as [] so the CLI --firewall stacking path
         # (which today happens independently of marker) can later be
         # wired up without a None check.
-        find, load = _patched(PROFILES_FIXTURE)
+        find, load = _patched(PROFILES_FIXTURE, env_name="profiles")
         with find, load:
             result = resolve_host_defaults(role="web", name="profiles-web-01")
         assert result is not None

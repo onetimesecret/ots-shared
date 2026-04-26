@@ -21,7 +21,7 @@ class TestInitCreatesFiles:
         marker = tmp_path / MARKER_FILENAME
         assert marker.exists()
         data = load_marker(marker)
-        assert data["environment"] == "myenv"
+        assert data["env_name"] == "myenv"
 
     def test_defaults_name_from_directory(self, tmp_path):
         target = tmp_path / "staging"
@@ -30,7 +30,7 @@ class TestInitCreatesFiles:
             app(["--directory", str(target)])
         assert exc_info.value.code is None or exc_info.value.code == 0
         data = load_marker(target / MARKER_FILENAME)
-        assert data["environment"] == "staging"
+        assert data["env_name"] == "staging"
 
     def test_creates_gitignore(self, tmp_path):
         with pytest.raises(SystemExit):
@@ -64,7 +64,7 @@ class TestInitOverwriteBehavior:
         with pytest.raises(SystemExit):
             app(["eu2", "--directory", str(tmp_path), "--force"])
         data = load_marker(marker)
-        assert data["environment"] == "eu2"
+        assert data["env_name"] == "eu2"
 
     def test_force_overwrites_gitignore(self, tmp_path):
         gitignore = tmp_path / ".gitignore"

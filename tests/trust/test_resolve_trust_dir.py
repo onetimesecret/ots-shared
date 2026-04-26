@@ -26,7 +26,7 @@ from ots_shared.trust import (  # type: ignore[import-not-found]
 
 
 def _write_marker(checkout: Path) -> None:
-    (checkout / ".otsinfra.yaml").write_text("environment: test\ncreated: '2026-04-25'\n")
+    (checkout / ".otsinfra.yaml").write_text("env_name: test\ncreated: '2026-04-25'\n")
 
 
 # ---- C1: marker at start dir → trust dir alongside it --------------------

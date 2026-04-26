@@ -334,13 +334,13 @@ class TestFindMarker:
 
     def test_finds_yaml_marker(self, tmp_path):
         marker = tmp_path / ".otsinfra.yaml"
-        marker.write_text("environment: eu2\n")
+        marker.write_text("env_name: eu2\n")
         result = find_marker(start=tmp_path)
         assert result == marker
 
     def test_prefers_yaml_over_env(self, tmp_path):
         yaml_marker = tmp_path / ".otsinfra.yaml"
-        yaml_marker.write_text("environment: eu2\n")
+        yaml_marker.write_text("env_name: eu2\n")
         env_file = tmp_path / ".otsinfra.env"
         env_file.write_text("OTS_HOST=example.com\n")
 
@@ -359,7 +359,7 @@ class TestFindMarker:
 
     def test_walks_up_to_find_yaml(self, tmp_path):
         marker = tmp_path / ".otsinfra.yaml"
-        marker.write_text("environment: eu2\n")
+        marker.write_text("env_name: eu2\n")
         subdir = tmp_path / "deep" / "nested"
         subdir.mkdir(parents=True)
 
@@ -372,9 +372,9 @@ class TestLoadMarker:
 
     def test_loads_simple_yaml(self, tmp_path):
         marker = tmp_path / ".otsinfra.yaml"
-        marker.write_text("environment: eu2\ncreated: '2026-04-10'\n")
+        marker.write_text("env_name: eu2\ncreated: '2026-04-10'\n")
         data = load_marker(marker)
-        assert data["environment"] == "eu2"
+        assert data["env_name"] == "eu2"
         assert data["created"] == "2026-04-10"
 
     def test_empty_file(self, tmp_path):
@@ -389,9 +389,9 @@ class TestLoadMarker:
 
     def test_comments_ignored(self, tmp_path):
         marker = tmp_path / ".otsinfra.yaml"
-        marker.write_text("# marker file\nenvironment: eu2\n")
+        marker.write_text("# marker file\nenv_name: eu2\n")
         data = load_marker(marker)
-        assert data["environment"] == "eu2"
+        assert data["env_name"] == "eu2"
         assert len(data) == 1
 
 
@@ -400,7 +400,7 @@ class TestResolveConfigDirWithMarker:
 
     def test_yaml_marker_with_config_sibling(self, tmp_path):
         marker = tmp_path / ".otsinfra.yaml"
-        marker.write_text("environment: eu2\n")
+        marker.write_text("env_name: eu2\n")
         (tmp_path / "config").mkdir()
 
         result = resolve_config_dir(start=tmp_path)
@@ -408,7 +408,7 @@ class TestResolveConfigDirWithMarker:
 
     def test_yaml_marker_without_config_returns_none(self, tmp_path):
         marker = tmp_path / ".otsinfra.yaml"
-        marker.write_text("environment: eu2\n")
+        marker.write_text("env_name: eu2\n")
         # No config/ directory
 
         result = resolve_config_dir(start=tmp_path)
@@ -416,7 +416,7 @@ class TestResolveConfigDirWithMarker:
 
     def test_yaml_marker_walks_up(self, tmp_path):
         marker = tmp_path / ".otsinfra.yaml"
-        marker.write_text("environment: eu2\n")
+        marker.write_text("env_name: eu2\n")
         (tmp_path / "config").mkdir()
         subdir = tmp_path / "deep"
         subdir.mkdir()
@@ -438,7 +438,7 @@ class TestGenerateMarker:
 
     def test_basic_content(self):
         content = generate_marker("eu2")
-        assert "environment: eu2" in content
+        assert "env_name: eu2" in content
         assert "created:" in content
 
     def test_extra_metadata(self):
@@ -463,7 +463,7 @@ class TestCreateMarker:
         assert path == tmp_path / MARKER_FILENAME
         assert path.exists()
         content = path.read_text()
-        assert "environment: eu2" in content
+        assert "env_name: eu2" in content
 
     def test_refuses_overwrite_without_force(self, tmp_path):
         marker = tmp_path / MARKER_FILENAME
@@ -477,12 +477,12 @@ class TestCreateMarker:
         marker = tmp_path / MARKER_FILENAME
         marker.write_text("old\n")
         path = create_marker(tmp_path, "eu2", force=True)
-        assert "environment: eu2" in path.read_text()
+        assert "env_name: eu2" in path.read_text()
 
     def test_roundtrip_with_load_marker(self, tmp_path):
         create_marker(tmp_path, "us-prod")
         data = load_marker(tmp_path / MARKER_FILENAME)
-        assert data["environment"] == "us-prod"
+        assert data["env_name"] == "us-prod"
         assert "created" in data
 
     def test_hosts_written_to_yaml(self, tmp_path):

@@ -260,7 +260,7 @@ def test_wg_serial_centralized_in_keypair_primitive(tmp_path: Path) -> None:
     from ots_shared.trust.manifest import Manifest
 
     (tmp_path / ".otsinfra.yaml").write_text(
-        "environment: test-wg-serial\n"
+        "env_name: test-wg-serial\n"
         "created: '2026-04-25'\n"
         "hosts:\n"
         "  web:\n"

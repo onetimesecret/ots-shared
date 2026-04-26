@@ -30,7 +30,7 @@ def _run_app(app, args: list[str]) -> int | None:
 
 def _set_marker_hosts(checkout: Path, *roles: str) -> None:
     lines = [
-        "environment: test-fixture",
+        "env_name: test-fixture",
         "created: '2026-04-25'",
     ]
     if roles:

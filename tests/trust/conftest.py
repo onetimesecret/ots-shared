@@ -61,7 +61,7 @@ def populated_trust_dir(tmp_path: Path) -> Path:
 
     # Marker — minimal but valid for the role-declaration tests.
     (checkout / ".otsinfra.yaml").write_text(
-        "environment: test-fixture\n"
+        "env_name: test-fixture\n"
         "created: '2026-04-25'\n"
         "hosts:\n"
         "  web:\n"

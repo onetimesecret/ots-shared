@@ -172,8 +172,11 @@ def resolve_host_defaults(role: str | None, name: str) -> HostDefaults | None:
     """Resolve server create defaults from .otsinfra.yaml.
 
     Picks a host role either from an explicit ``role`` argument or — when
-    unset — by tokenizing *name* on ``-`` and matching tokens against the
-    marker's host keys.
+    unset — by delegating to :func:`ots_shared.ssh.hostname.parse_hostname`,
+    the canonical parser shared with ``lots deploy``, ``lots provision``,
+    and ``lots confext push``. The parser infers the role by suffix match
+    against configured host role names; if more than one suffix matches,
+    the longest matching suffix wins deterministically.
 
     Returns ``None`` when no marker file is found on disk (i.e. the
     project has opted out of marker-backed defaults entirely).
@@ -181,7 +184,9 @@ def resolve_host_defaults(role: str | None, name: str) -> HostDefaults | None:
     Raises ``SystemExit`` — with distinct messages — when:
       * the marker exists but has no ``hosts`` block,
       * an explicit ``--role`` does not match any entry,
-      * auto-match finds zero or multiple role tokens in ``name``,
+      * the parser raises any :class:`ots_shared.ssh.hostname.HostnameError`
+        (e.g. no suffix of *name* matches a configured role, or the env
+        prefix mismatches ``marker['env_name']``),
       * a value under ``hosts.<role>`` has the wrong type (known key),
       * ``hosts.<role>`` contains a scalar/list-valued key not in
         :data:`MARKER_HOST_FIELDS` (dict-valued keys are silently ignored
@@ -213,7 +218,7 @@ def resolve_host_defaults(role: str | None, name: str) -> HostDefaults | None:
         raise SystemExit(f"{marker_path}: 'hosts' block is empty — cannot infer defaults.")
 
     available = sorted(hosts.keys())
-    resolved_role = _resolve_role(role, name, hosts, available, marker_path)
+    resolved_role = _resolve_role(role, name, hosts, available, marker, marker_path)
 
     host = hosts.get(resolved_role, {})
     if not isinstance(host, dict):
@@ -285,9 +290,21 @@ def _resolve_role(
     name: str,
     hosts: dict,
     available: list[str],
+    marker: dict,
     marker_path: Path,
 ) -> str:
-    """Explicit role wins; otherwise auto-match on hyphen-separated tokens."""
+    """Explicit ``--role`` wins; otherwise delegate to the canonical parser.
+
+    The hostname → role lookup is :func:`ots_shared.ssh.hostname.parse_hostname`
+    — the single source of truth shared with ``lots deploy``,
+    ``lots provision``, and ``lots confext push``. Errors from the parser
+    are translated to ``SystemExit`` so this CLI's existing fail-loud
+    surface is preserved.
+
+    ``marker`` is the already-loaded marker dict from
+    :func:`resolve_host_defaults`; ``marker_path`` is retained for error
+    messages (and is the on-disk source the dict came from).
+    """
     if role is not None:
         if role not in hosts:
             raise SystemExit(
@@ -295,25 +312,25 @@ def _resolve_role(
             )
         return role
 
-    matches = [token for token in name.split("-") if token in hosts]
-    if len(matches) == 1:
-        resolved = matches[0]
-        logger.info(
-            "Inferred --role=%s from server name '%s' via %s",
-            resolved,
-            name,
-            marker_path,
-        )
-        return resolved
-    if len(matches) > 1:
+    # Late import: parse_hostname lives in a sibling package subdirectory
+    # and pulling it at module top would couple ots_shared.hcloud to
+    # ots_shared.ssh import order during cold loads.
+    from ots_shared.ssh.hostname import HostnameError, parse_hostname
+
+    try:
+        parsed = parse_hostname(name, marker)
+    except HostnameError as exc:
         raise SystemExit(
-            f"{marker_path}: server name '{name}' matches multiple roles "
-            f"{matches}. Pass --role explicitly."
-        )
-    raise SystemExit(
-        f"{marker_path}: server name '{name}' does not match any role. "
-        f"Available: {available}. Pass --role explicitly or rename."
+            f"{marker_path}: {exc}. Pass --role explicitly or rename the host."
+        ) from exc
+
+    logger.info(
+        "Inferred --role=%s from server name '%s' via %s",
+        parsed.role,
+        name,
+        marker_path,
     )
+    return parsed.role
 
 
 def get_server_or_exit(client: Client, name: str) -> Server:

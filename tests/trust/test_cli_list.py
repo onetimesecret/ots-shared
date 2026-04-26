@@ -31,7 +31,7 @@ def _run_app(app, args: list[str]) -> int | None:
 def _set_marker_hosts(checkout: Path, *roles: str) -> None:
     """Rewrite ``.otsinfra.yaml`` declaring exactly *roles*."""
     lines = [
-        "environment: test-fixture",
+        "env_name: test-fixture",
         "created: '2026-04-25'",
     ]
     if roles:
@@ -120,7 +120,7 @@ def _set_marker_with_socks(checkout: Path, *roles: str, declare_socks: bool) -> 
     distinguish declared-vs-on-disk. We keep the assertion permissive
     so the test stays useful regardless of the final shape.
     """
-    lines = ["environment: test-fixture", "created: '2026-04-25'"]
+    lines = ["env_name: test-fixture", "created: '2026-04-25'"]
     if roles:
         lines.append("hosts:")
         for role in roles:

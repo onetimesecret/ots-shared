@@ -159,7 +159,7 @@ def test_prune_holds_exclusive_lock_during_run(
 
 
 def _set_marker(checkout: Path, *roles: str) -> None:
-    lines = ["environment: test-fixture", "created: '2026-04-25'"]
+    lines = ["env_name: test-fixture", "created: '2026-04-25'"]
     if roles:
         lines.append("hosts:")
         for role in roles:
