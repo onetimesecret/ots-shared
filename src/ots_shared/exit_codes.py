@@ -1,4 +1,4 @@
-# packages/ots-shared/src/ots_shared/exit_codes.py
+# src/ots_shared/exit_codes.py
 
 """Standardised exit codes for all OTS CLI tools.
 

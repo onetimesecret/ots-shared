@@ -1,4 +1,4 @@
-# packages/ots-shared/src/ots_shared/ssh/executor.py
+# src/ots_shared/ssh/executor.py
 
 """Command execution abstraction for local and remote (SSH) targets.
 

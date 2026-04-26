@@ -1,4 +1,4 @@
-# packages/ots-shared/src/ots_shared/hcloud/server_defaults.py
+# src/ots_shared/hcloud/server_defaults.py
 
 """Library helpers for resolving Hetzner server defaults from .otsinfra.yaml.
 

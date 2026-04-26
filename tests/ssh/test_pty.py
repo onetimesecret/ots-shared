@@ -1,4 +1,4 @@
-# packages/ots-shared/tests/ssh/test_pty.py
+# tests/ssh/test_pty.py
 
 """Tests for ots_shared.ssh._pty module.
 

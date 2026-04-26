@@ -1,4 +1,4 @@
-# packages/ots-shared/src/ots_shared/hcloud/network_plan.py
+# src/ots_shared/hcloud/network_plan.py
 
 """Pure logic for the ``network ensure`` reconciler.
 

@@ -1,4 +1,4 @@
-# packages/rots/packages/ots-shared/tests/hcloud/test_server_defaults.py
+# tests/hcloud/test_server_defaults.py
 
 """Tests for ots_shared.hcloud.server_defaults.
 

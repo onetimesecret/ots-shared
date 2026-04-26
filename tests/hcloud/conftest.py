@@ -1,4 +1,4 @@
-# packages/rots/packages/ots-shared/tests/hcloud/conftest.py
+# tests/hcloud/conftest.py
 
 """Shared fixtures for ots_shared.hcloud library tests.
 

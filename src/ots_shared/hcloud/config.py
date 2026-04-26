@@ -1,4 +1,4 @@
-# packages/ots-shared/src/ots_shared/hcloud/config.py
+# src/ots_shared/hcloud/config.py
 
 """Hetzner Cloud client configuration shared across OTS tools."""
 

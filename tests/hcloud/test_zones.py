@@ -1,4 +1,4 @@
-# packages/rots/packages/ots-shared/tests/hcloud/test_zones.py
+# tests/hcloud/test_zones.py
 
 """Tests for ots_shared.hcloud.zones constants.
 

@@ -1,4 +1,4 @@
-# packages/rots/packages/ots-shared/tests/hcloud/test_errors.py
+# tests/hcloud/test_errors.py
 
 """Tests for hcloud API error handling."""
 

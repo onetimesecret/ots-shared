@@ -1,4 +1,4 @@
-# packages/rots/packages/ots-shared/tests/hcloud/test_network_plan.py
+# tests/hcloud/test_network_plan.py
 
 """Unit tests for ots_shared.hcloud.network_plan.
 

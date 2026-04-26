@@ -1,4 +1,4 @@
-# packages/ots-shared/tests/ssh/test_env_network.py
+# tests/ssh/test_env_network.py
 
 """Tests for the top-level ``network:`` block accessor in ots_shared.ssh.env.
 
