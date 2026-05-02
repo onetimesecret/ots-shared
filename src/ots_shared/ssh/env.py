@@ -352,8 +352,7 @@ def _eval_formula(formula: str, variables: Mapping[str, int | str]) -> str:
     for node in ast.walk(tree):
         if type(node) not in _FORMULA_ALLOWED_NODES:
             raise ValueError(
-                f"private_ip_formula contains forbidden node "
-                f"{type(node).__name__!s}: {formula!r}"
+                f"private_ip_formula contains forbidden node {type(node).__name__!s}: {formula!r}"
             )
         if isinstance(node, ast.Name) and node.id not in variables:
             raise ValueError(
@@ -396,16 +395,12 @@ def _resolve_cidr_ip(
         host_index = 10 + ord_int
         addr = network.network_address + host_index
         if addr not in network:
-            raise ValueError(
-                f"in_order ordinal {ordinal!r} overflows {cidr} (would assign {addr})"
-            )
+            raise ValueError(f"in_order ordinal {ordinal!r} overflows {cidr} (would assign {addr})")
         return str(addr)
 
     if strategy == "calculated":
         if not formula:
-            raise ValueError(
-                "private_ip_assignment_type='calculated' requires private_ip_formula"
-            )
+            raise ValueError("private_ip_assignment_type='calculated' requires private_ip_formula")
         env_name_raw = marker.get("env_name") if isinstance(marker, Mapping) else None
         env_name = env_name_raw if isinstance(env_name_raw, str) else ""
         region_id = _derive_region_id(marker)
