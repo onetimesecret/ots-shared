@@ -202,9 +202,7 @@ def _derive_subnets(
                     f"hosts.{role}.private_ip_cidr {raw_cidr} is not a subset of "
                     f"network.ip_range {master.with_prefixlen}",
                 )
-            slash24 = ipaddress.ip_network(
-                f"{host_cidr.network_address}/24", strict=False
-            )
+            slash24 = ipaddress.ip_network(f"{host_cidr.network_address}/24", strict=False)
             cidr = slash24.with_prefixlen
             if cidr not in seen_subnets:
                 seen_subnets[cidr] = SubnetSpec(ip_range=cidr, network_zone=network_zone)
