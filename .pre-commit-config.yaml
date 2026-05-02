@@ -1,0 +1,122 @@
+##
+# Pre-Commit Hooks Configuration
+#
+# Two-stage layout, mirroring the parent monorepo
+# (onetime/tools-monorepo) so the same gates fire whether the work
+# happens here or via the submodule:
+#
+#   pre-commit  ~2s budget   filesystem hygiene + ruff (auto-fix)
+#   pre-push    30-60s       full ruff/pyright/pytest, mirroring CI
+#
+# Setup:
+#   $ pip install pre-commit
+#   $ pre-commit install     # wires both stages via default_install_hook_types
+#
+# Usage:
+#   $ pre-commit run --all-files                          # commit stage
+#   $ pre-commit run --hook-stage pre-push --all-files    # push stage
+#   $ pre-commit autoupdate
+#
+# Bypass (use sparingly):
+#   $ git commit --no-verify
+#   $ git push   --no-verify
+
+default_install_hook_types:
+  - pre-commit
+  - pre-push
+
+default_stages: [pre-commit]
+
+# Run all hooks even if one fails — avoids commit→fail→fix→commit churn.
+fail_fast: false
+
+repos:
+  - repo: meta
+    hooks:
+      - id: check-useless-excludes
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # pre-commit stage: fast filesystem and syntax sanity
+  # ──────────────────────────────────────────────────────────────────────────
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        stages: [pre-commit]
+      - id: end-of-file-fixer
+        stages: [pre-commit]
+      - id: check-merge-conflict
+        stages: [pre-commit]
+      - id: detect-private-key
+        stages: [pre-commit]
+      - id: check-added-large-files
+        stages: [pre-commit]
+        args: ["--maxkb=2500"]
+      - id: no-commit-to-branch
+        stages: [pre-commit]
+        args: ["--branch", "main"]
+      - id: check-yaml
+        stages: [pre-commit]
+      - id: check-toml
+        stages: [pre-commit]
+
+  # Ruff — fast lint + format. Commit stage applies fixes automatically;
+  # the push stage below re-runs in --check mode to gate the push.
+  # Pin matches the workspace ruff used by the parent monorepo so the
+  # same rules fire in both contexts.
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.12
+    hooks:
+      - id: ruff
+        alias: ruff-fix
+        name: ruff (fix, commit stage)
+        args: [--fix]
+        types: [python]
+        stages: [pre-commit]
+      - id: ruff-format
+        alias: ruff-format-fix
+        name: ruff format (write, commit stage)
+        types: [python]
+        stages: [pre-commit]
+
+  # ──────────────────────────────────────────────────────────────────────────
+  # pre-push stage: mirror CI so failures surface before the push lands.
+  # CI runs `ruff check src/`, `ruff format --check src/`, `pyright src/`,
+  # and `pytest tests/ --cov-fail-under=70` — these hooks do the same.
+  # ──────────────────────────────────────────────────────────────────────────
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.12
+    hooks:
+      - id: ruff
+        alias: ruff-check-strict
+        name: ruff check (strict, push stage)
+        args: [--no-fix]
+        types: [python]
+        stages: [pre-push]
+      - id: ruff-format
+        alias: ruff-format-check
+        name: ruff format --check (push stage)
+        args: [--check]
+        types: [python]
+        stages: [pre-push]
+
+  - repo: local
+    hooks:
+      - id: pyright
+        name: pyright (push stage)
+        language: system
+        entry: uv run pyright src/
+        files: ^(src|pyproject\.toml)
+        pass_filenames: false
+        stages: [pre-push]
+
+      # --cov is passed so [tool.coverage.report] fail_under (mirroring CI's
+      # --cov-fail-under=70) actually fires locally — without --cov,
+      # pytest-cov skips the gate entirely.
+      - id: pytest
+        name: pytest (fast, push stage)
+        language: system
+        entry: uv run pytest -x -q --cov=ots_shared tests/
+        files: ^(src|tests|pyproject\.toml)
+        pass_filenames: false
+        stages: [pre-push]
