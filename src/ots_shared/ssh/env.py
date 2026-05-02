@@ -247,11 +247,84 @@ DEFAULT_HOSTS: dict[str, dict[str, str]] = {
 }
 
 
-def get_host_ip(marker: dict, role: str) -> str | None:
-    """Extract ``private_ip_address`` for *role* from loaded marker data."""
+def get_host_ip(marker: dict, role: str, ordinal: str = "01") -> str | None:
+    """Resolve the private IP for ``role`` at ``ordinal`` from marker data.
+
+    Resolution order (mirrors the schema reference in
+    ``examples/environment/.otsinfra.yaml``):
+
+    1. ``hosts.<role>.ordinals.<NN>.private_ip_address`` — explicit
+       per-replica override wins.
+    2. ``hosts.<role>.private_ip_address`` — legacy single scalar; resolves
+       only for ordinal ``"01"``. Higher ordinals are NOT auto-aliased
+       (silent collision was the original bug). Fall through to CIDR
+       resolution if no match.
+    3. ``hosts.<role>.private_ip_cidr`` with
+       ``private_ip_assignment_type: in_order`` (default) — derives
+       ``network_address + 10 + int(ordinal)``. ``.0`` through ``.9`` are
+       reserved for gateway and infrastructure.
+
+    Returns ``None`` when none of the forms above produce a value. The
+    caller decides whether ``None`` is fatal — confext template
+    substitution raises ``SystemExit`` upstream; peer-IP and subnet
+    resolvers treat ``None`` as "no value, skip the optional rule."
+
+    Raises:
+        ValueError: when *ordinal* is not a non-empty digit string,
+            when ``private_ip_cidr`` is malformed, or when the derived
+            host index falls outside the CIDR.
+    """
+    if not ordinal or not ordinal.isdigit():
+        raise ValueError(f"ordinal must be a non-empty digit string, got {ordinal!r}")
+
     hosts = marker.get("hosts", {})
-    host = hosts.get(role, {})
-    return host.get("private_ip_address")
+    if not isinstance(hosts, dict):
+        return None
+    host = hosts.get(role)
+    if not isinstance(host, dict):
+        return None
+
+    # 1. Explicit per-ordinal override.
+    ordinals_block = host.get("ordinals")
+    if isinstance(ordinals_block, dict):
+        override = ordinals_block.get(ordinal)
+        if isinstance(override, dict):
+            ip = override.get("private_ip_address")
+            if isinstance(ip, str) and ip:
+                return ip
+
+    # 2. Legacy single scalar — only valid for canonical first instance.
+    if ordinal == "01":
+        scalar = host.get("private_ip_address")
+        if isinstance(scalar, str) and scalar:
+            return scalar
+
+    # 3. CIDR-derived in_order assignment.
+    cidr = host.get("private_ip_cidr")
+    if isinstance(cidr, str) and cidr:
+        import ipaddress
+
+        assignment = host.get("private_ip_assignment_type", "in_order")
+        if assignment != "in_order":
+            # 'calculated' (and any other future modes) are out of scope
+            # for this resolver — the formula DSL hasn't landed yet.
+            return None
+        try:
+            network = ipaddress.ip_network(cidr, strict=False)
+        except (ValueError, TypeError) as exc:
+            raise ValueError(
+                f"hosts.{role}.private_ip_cidr is not a valid CIDR: {cidr!r} ({exc})"
+            ) from exc
+        offset = 10 + int(ordinal)
+        candidate = network.network_address + offset
+        if candidate not in network:
+            raise ValueError(
+                f"hosts.{role}.private_ip_cidr {cidr} too small for ordinal {ordinal!r} "
+                f"(in_order needs network_address + 10 + int(ordinal))"
+            )
+        return str(candidate)
+
+    return None
 
 
 def resolve_env_name(marker: Mapping[str, Any] | None) -> str:

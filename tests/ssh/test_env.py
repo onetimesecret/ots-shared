@@ -2,6 +2,8 @@
 
 """Tests for ots_shared.ssh.env module."""
 
+import pytest
+
 from ots_shared.ssh.env import (
     MARKER_FILENAME,
     _tag_to_version,
@@ -10,6 +12,7 @@ from ots_shared.ssh.env import (
     find_marker,
     generate_env_template,
     generate_marker,
+    get_host_ip,
     load_env_file,
     load_marker,
     resolve_config_dir,
@@ -587,3 +590,139 @@ class TestValidateEnvFile:
 
         assert warnings == []
         assert errors == []
+
+
+class TestGetHostIp:
+    """Resolution order: ordinals.<NN> > legacy scalar (only "01") > CIDR.
+
+    Mirrors the schema reference in ``examples/environment/.otsinfra.yaml``
+    and the regression contract in ``packages/lots/tests/test_confext_ordinal.py``.
+    """
+
+    def test_legacy_scalar_resolves_for_ordinal_01(self):
+        marker = {"hosts": {"web": {"private_ip_address": "10.101.1.11"}}}
+
+        assert get_host_ip(marker, "web", "01") == "10.101.1.11"
+
+    def test_legacy_scalar_default_ordinal_is_01(self):
+        marker = {"hosts": {"web": {"private_ip_address": "10.101.1.11"}}}
+
+        # No ordinal kwarg → defaults to "01" so the legacy scalar resolves.
+        assert get_host_ip(marker, "web") == "10.101.1.11"
+
+    def test_legacy_scalar_does_not_alias_higher_ordinals(self):
+        # The original silent-collision bug: eu-web-02 must NOT inherit
+        # eu-web-01's IP from the single scalar.
+        marker = {"hosts": {"web": {"private_ip_address": "10.101.1.11"}}}
+
+        assert get_host_ip(marker, "web", "02") is None
+
+    def test_ordinals_block_overrides_legacy_scalar(self):
+        marker = {
+            "hosts": {
+                "web": {
+                    "private_ip_address": "10.101.1.11",
+                    "ordinals": {"02": {"private_ip_address": "10.101.1.99"}},
+                }
+            }
+        }
+
+        assert get_host_ip(marker, "web", "01") == "10.101.1.11"
+        assert get_host_ip(marker, "web", "02") == "10.101.1.99"
+
+    def test_ordinals_block_only(self):
+        marker = {
+            "hosts": {
+                "web": {
+                    "ordinals": {
+                        "01": {"private_ip_address": "10.101.1.50"},
+                        "02": {"private_ip_address": "10.101.1.99"},
+                    }
+                }
+            }
+        }
+
+        assert get_host_ip(marker, "web", "01") == "10.101.1.50"
+        assert get_host_ip(marker, "web", "02") == "10.101.1.99"
+
+    def test_cidr_in_order_assigns_per_ordinal(self):
+        # Default in_order: network_address + 10 + int(ordinal).
+        marker = {"hosts": {"web": {"private_ip_cidr": "10.101.1.0/24"}}}
+
+        assert get_host_ip(marker, "web", "01") == "10.101.1.11"
+        assert get_host_ip(marker, "web", "02") == "10.101.1.12"
+        assert get_host_ip(marker, "web", "03") == "10.101.1.13"
+
+    def test_explicit_in_order_assignment_type(self):
+        marker = {
+            "hosts": {
+                "web": {
+                    "private_ip_cidr": "10.101.1.0/24",
+                    "private_ip_assignment_type": "in_order",
+                }
+            }
+        }
+
+        assert get_host_ip(marker, "web", "01") == "10.101.1.11"
+
+    def test_calculated_assignment_type_returns_none(self):
+        # 'calculated' is reserved for the formula DSL — not implemented
+        # here, so no fallback to in_order. Caller fails loud upstream.
+        marker = {
+            "hosts": {
+                "web": {
+                    "private_ip_cidr": "10.101.1.0/24",
+                    "private_ip_assignment_type": "calculated",
+                }
+            }
+        }
+
+        assert get_host_ip(marker, "web", "01") is None
+
+    def test_returns_none_for_missing_role(self):
+        marker = {"hosts": {"db": {"private_ip_address": "10.101.0.11"}}}
+
+        assert get_host_ip(marker, "web", "01") is None
+
+    def test_returns_none_when_hosts_block_absent(self):
+        assert get_host_ip({}, "web", "01") is None
+
+    def test_returns_none_when_hosts_is_not_a_dict(self):
+        # Defensive: a malformed marker shouldn't blow up here, but the
+        # caller has no IP to inject.
+        assert get_host_ip({"hosts": "broken"}, "web", "01") is None
+
+    def test_ordinal_block_falls_through_to_cidr_when_match_missing(self):
+        # ordinals defines 02 only; 03 must fall through to CIDR derivation.
+        marker = {
+            "hosts": {
+                "web": {
+                    "private_ip_cidr": "10.101.1.0/24",
+                    "ordinals": {"02": {"private_ip_address": "10.101.1.99"}},
+                }
+            }
+        }
+
+        assert get_host_ip(marker, "web", "02") == "10.101.1.99"
+        assert get_host_ip(marker, "web", "03") == "10.101.1.13"
+
+    def test_invalid_ordinal_raises(self):
+        marker = {"hosts": {"web": {"private_ip_address": "10.101.1.11"}}}
+
+        with pytest.raises(ValueError, match="ordinal"):
+            get_host_ip(marker, "web", "")
+        with pytest.raises(ValueError, match="ordinal"):
+            get_host_ip(marker, "web", "abc")
+
+    def test_invalid_cidr_raises(self):
+        marker = {"hosts": {"web": {"private_ip_cidr": "not-a-cidr"}}}
+
+        with pytest.raises(ValueError, match="private_ip_cidr"):
+            get_host_ip(marker, "web", "01")
+
+    def test_cidr_too_small_for_ordinal_raises(self):
+        # /30 has 4 addresses; offset 11 is well outside.
+        marker = {"hosts": {"web": {"private_ip_cidr": "10.101.1.0/30"}}}
+
+        with pytest.raises(ValueError, match="too small"):
+            get_host_ip(marker, "web", "01")
