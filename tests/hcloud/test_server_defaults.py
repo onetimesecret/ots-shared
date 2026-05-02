@@ -309,6 +309,28 @@ class TestResolveHostDefaultsCoercion:
         assert result is not None
         assert result.get("firewalls") == []
 
+    def test_profile_str_field_accepted(self):
+        # Schema-level acceptance: a non-canonical role (e.g. ``web_alt``)
+        # carrying ``profile: web_alt`` validates without an unknown-key
+        # error. Dispatch at cloud-init render time is a separate layer.
+        find, load = _patched({"web_alt": {"profile": "web_alt"}})
+        with find, load:
+            result = resolve_host_defaults(role="web_alt", name="web-alt-01")
+        assert result is not None
+        assert result.get("profile") == "web_alt"
+
+    def test_profile_must_be_string(self):
+        find, load = _patched({"web_alt": {"profile": 42}})
+        with find, load:
+            with pytest.raises(SystemExit, match="profile.*must be str"):
+                resolve_host_defaults(role="web_alt", name="web-alt-01")
+
+    def test_profile_must_be_non_empty(self):
+        find, load = _patched({"web_alt": {"profile": ""}})
+        with find, load:
+            with pytest.raises(SystemExit, match="profile.*must be str"):
+                resolve_host_defaults(role="web_alt", name="web-alt-01")
+
 
 class TestResolveHostDefaultsRoleMatching:
     def test_explicit_role_wins_over_auto_match(self):

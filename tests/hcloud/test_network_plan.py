@@ -316,6 +316,116 @@ class TestParseMarkerHostsSkipped:
 
 
 # ---------------------------------------------------------------------------
+# parse_marker — private_ip_cidr and ordinals subnet derivation
+# ---------------------------------------------------------------------------
+
+
+class TestParseMarkerCidrAndOrdinals:
+    """CIDR-only hosts and per-ordinal IPs both register subnets."""
+
+    def test_cidr_only_host_registers_subnet(self):
+        marker = _marker_with_hosts(
+            {"web": {"private_ip_cidr": "10.101.3.0/24", "location": "nbg1"}}
+        )
+        state = parse_marker(marker, marker_path=MARKER_PATH)
+        assert len(state.subnets) == 1
+        assert state.subnets[0].ip_range == "10.101.3.0/24"
+
+    def test_cidr_smaller_than_24_rolls_up_to_enclosing_24(self):
+        marker = _marker_with_hosts(
+            {"web": {"private_ip_cidr": "10.101.4.0/28", "location": "nbg1"}}
+        )
+        state = parse_marker(marker, marker_path=MARKER_PATH)
+        assert len(state.subnets) == 1
+        assert state.subnets[0].ip_range == "10.101.4.0/24"
+
+    def test_legacy_ip_plus_cidr_dedup_when_in_same_24(self):
+        marker = _marker_with_hosts(
+            {
+                "web": {
+                    "private_ip_address": "10.101.5.11",
+                    "private_ip_cidr": "10.101.5.0/24",
+                    "location": "nbg1",
+                }
+            }
+        )
+        state = parse_marker(marker, marker_path=MARKER_PATH)
+        assert len(state.subnets) == 1
+        assert state.subnets[0].ip_range == "10.101.5.0/24"
+
+    def test_ordinals_in_different_24s_produce_two_subnets(self):
+        marker = _marker_with_hosts(
+            {
+                "web": {
+                    "private_ip_cidr": "10.101.1.0/24",
+                    "location": "nbg1",
+                    "ordinals": {
+                        "01": {"private_ip_address": "10.101.1.11"},
+                        "02": {"private_ip_address": "10.101.7.99"},
+                    },
+                }
+            }
+        )
+        state = parse_marker(marker, marker_path=MARKER_PATH)
+        ranges = [s.ip_range for s in state.subnets]
+        assert ranges == ["10.101.1.0/24", "10.101.7.0/24"]
+
+    def test_cidr_outside_master_fails_loud(self, capsys):
+        marker = _marker_with_hosts(
+            {"web": {"private_ip_cidr": "10.200.0.0/24", "location": "nbg1"}}
+        )
+        with pytest.raises(SystemExit) as exc:
+            parse_marker(marker, marker_path=MARKER_PATH)
+        assert exc.value.code == 65
+        assert "private_ip_cidr" in capsys.readouterr().err
+
+    def test_cidr_invalid_string_fails_loud(self):
+        marker = _marker_with_hosts(
+            {"web": {"private_ip_cidr": "not-a-cidr", "location": "nbg1"}}
+        )
+        with pytest.raises(SystemExit) as exc:
+            parse_marker(marker, marker_path=MARKER_PATH)
+        assert exc.value.code == 65
+
+    def test_cidr_wrong_type_fails_loud(self):
+        marker = _marker_with_hosts(
+            {"web": {"private_ip_cidr": 24, "location": "nbg1"}}
+        )
+        with pytest.raises(SystemExit) as exc:
+            parse_marker(marker, marker_path=MARKER_PATH)
+        assert exc.value.code == 65
+
+    def test_ordinal_ip_outside_master_fails_loud(self):
+        marker = _marker_with_hosts(
+            {
+                "web": {
+                    "private_ip_cidr": "10.101.1.0/24",
+                    "location": "nbg1",
+                    "ordinals": {"02": {"private_ip_address": "10.200.5.5"}},
+                }
+            }
+        )
+        with pytest.raises(SystemExit) as exc:
+            parse_marker(marker, marker_path=MARKER_PATH)
+        assert exc.value.code == 65
+
+    def test_non_dict_ordinal_value_skipped(self):
+        # Defensive: a malformed ordinal entry should not crash the parser.
+        marker = _marker_with_hosts(
+            {
+                "web": {
+                    "private_ip_cidr": "10.101.1.0/24",
+                    "location": "nbg1",
+                    "ordinals": {"02": "should be a mapping"},
+                }
+            }
+        )
+        state = parse_marker(marker, marker_path=MARKER_PATH)
+        assert len(state.subnets) == 1
+        assert state.subnets[0].ip_range == "10.101.1.0/24"
+
+
+# ---------------------------------------------------------------------------
 # diff_state
 # ---------------------------------------------------------------------------
 

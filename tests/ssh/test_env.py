@@ -2,14 +2,19 @@
 
 """Tests for ots_shared.ssh.env module."""
 
+import pytest
+
 from ots_shared.ssh.env import (
     MARKER_FILENAME,
+    _derive_region_id,
+    _eval_formula,
     _tag_to_version,
     create_marker,
     find_env_file,
     find_marker,
     generate_env_template,
     generate_marker,
+    get_host_ip,
     load_env_file,
     load_marker,
     resolve_config_dir,
@@ -587,3 +592,275 @@ class TestValidateEnvFile:
 
         assert warnings == []
         assert errors == []
+
+
+# ---------------------------------------------------------------------------
+# get_host_ip — resolution order across legacy / ordinals / CIDR
+# ---------------------------------------------------------------------------
+
+
+class TestGetHostIp:
+    """Resolver precedence: ordinals → legacy (only "01") → CIDR."""
+
+    def test_legacy_scalar_resolves_for_ordinal_01(self):
+        marker = {"hosts": {"db": {"private_ip_address": "10.0.0.11"}}}
+        assert get_host_ip(marker, "db", "01") == "10.0.0.11"
+
+    def test_legacy_scalar_returns_none_for_higher_ordinal(self):
+        # Legacy single-scalar markers must NOT alias higher ordinals to the
+        # canonical IP — that was the silent wrong-IP bug.
+        marker = {"hosts": {"db": {"private_ip_address": "10.0.0.11"}}}
+        assert get_host_ip(marker, "db", "02") is None
+
+    def test_legacy_default_ordinal_is_01(self):
+        marker = {"hosts": {"db": {"private_ip_address": "10.0.0.11"}}}
+        assert get_host_ip(marker, "db") == "10.0.0.11"
+
+    def test_ordinals_override_beats_legacy_scalar(self):
+        marker = {
+            "hosts": {
+                "db": {
+                    "private_ip_address": "10.0.0.11",
+                    "ordinals": {"02": {"private_ip_address": "10.0.0.99"}},
+                }
+            }
+        }
+        # Ordinal 01 still maps to the legacy scalar (no override defined).
+        assert get_host_ip(marker, "db", "01") == "10.0.0.11"
+        # Ordinal 02 takes the explicit override.
+        assert get_host_ip(marker, "db", "02") == "10.0.0.99"
+
+    def test_ordinals_override_at_01_beats_legacy(self):
+        marker = {
+            "hosts": {
+                "db": {
+                    "private_ip_address": "10.0.0.11",
+                    "ordinals": {"01": {"private_ip_address": "10.0.0.50"}},
+                }
+            }
+        }
+        assert get_host_ip(marker, "db", "01") == "10.0.0.50"
+
+    def test_cidr_in_order_default_assignment(self):
+        # network base 10.101.1.0/24 → ordinal "01" → 10.101.1.11.
+        marker = {
+            "hosts": {
+                "web": {"private_ip_cidr": "10.101.1.0/24"},
+            }
+        }
+        assert get_host_ip(marker, "web", "01") == "10.101.1.11"
+        assert get_host_ip(marker, "web", "02") == "10.101.1.12"
+
+    def test_cidr_in_order_explicit_assignment_type(self):
+        marker = {
+            "hosts": {
+                "web": {
+                    "private_ip_cidr": "10.101.1.0/24",
+                    "private_ip_assignment_type": "in_order",
+                },
+            }
+        }
+        assert get_host_ip(marker, "web", "07") == "10.101.1.17"
+
+    def test_cidr_calculated_with_formula(self):
+        # 10.(100+region_id).(ordinal).11 — encoded as a literal-string
+        # concatenation (formula DSL is arithmetic + string concat only).
+        marker = {
+            "network": {
+                "name": "n",
+                "ip_range": "10.103.0.0/16",
+                "network_zone": "eu-central",
+            },
+            "hosts": {
+                "web": {
+                    "private_ip_cidr": "10.103.5.0/24",
+                    "private_ip_assignment_type": "calculated",
+                    "private_ip_formula": (
+                        "'10.' + (100 + region_id) + '.' + ordinal + '.11'"
+                    ),
+                },
+            },
+        }
+        # region_id=3 (second octet 103 - 100), ordinal=2 → 10.103.2.11.
+        assert get_host_ip(marker, "web", "02") == "10.103.2.11"
+
+    def test_cidr_in_order_overflow_fails_loud(self):
+        marker = {"hosts": {"web": {"private_ip_cidr": "10.101.1.0/29"}}}
+        # /29 has 8 addresses; 10 + 1 = 11 overflows.
+        with pytest.raises(ValueError, match="overflows"):
+            get_host_ip(marker, "web", "01")
+
+    def test_cidr_calculated_without_formula_fails_loud(self):
+        marker = {
+            "hosts": {
+                "web": {
+                    "private_ip_cidr": "10.101.1.0/24",
+                    "private_ip_assignment_type": "calculated",
+                },
+            }
+        }
+        with pytest.raises(ValueError, match="requires private_ip_formula"):
+            get_host_ip(marker, "web", "01")
+
+    def test_unknown_assignment_type_fails_loud(self):
+        marker = {
+            "hosts": {
+                "web": {
+                    "private_ip_cidr": "10.101.1.0/24",
+                    "private_ip_assignment_type": "random",
+                },
+            }
+        }
+        with pytest.raises(ValueError, match="must be 'in_order' or 'calculated'"):
+            get_host_ip(marker, "web", "01")
+
+    def test_returns_none_when_role_missing(self):
+        marker = {"hosts": {"db": {"private_ip_address": "10.0.0.11"}}}
+        assert get_host_ip(marker, "web", "01") is None
+
+    def test_returns_none_when_no_hosts_block(self):
+        assert get_host_ip({}, "db", "01") is None
+
+    def test_returns_none_when_role_has_no_ip_source(self):
+        marker = {"hosts": {"web": {"location": "nbg1"}}}
+        assert get_host_ip(marker, "web", "01") is None
+
+    def test_non_dict_host_returns_none(self):
+        marker = {"hosts": {"web": "not-a-dict"}}
+        assert get_host_ip(marker, "web", "01") is None
+
+
+# ---------------------------------------------------------------------------
+# _eval_formula — restricted arithmetic DSL, allowlisted AST walk
+# ---------------------------------------------------------------------------
+
+
+class TestEvalFormula:
+    """Operator coverage and rejection of dangerous AST nodes."""
+
+    def test_addition(self):
+        assert _eval_formula("ordinal + 10", {"ordinal": 5}) == "15"
+
+    def test_subtraction(self):
+        assert _eval_formula("ordinal - 1", {"ordinal": 5}) == "4"
+
+    def test_multiplication(self):
+        assert _eval_formula("ordinal * 4", {"ordinal": 3}) == "12"
+
+    def test_division_is_floor_division(self):
+        # Division uses // semantics under the hood for IP arithmetic.
+        assert _eval_formula("ordinal / 2", {"ordinal": 7}) == "3"
+
+    def test_floor_division(self):
+        assert _eval_formula("ordinal // 2", {"ordinal": 7}) == "3"
+
+    def test_modulo(self):
+        assert _eval_formula("ordinal % 3", {"ordinal": 7}) == "1"
+
+    def test_left_shift(self):
+        assert _eval_formula("ordinal << 2", {"ordinal": 3}) == "12"
+
+    def test_right_shift(self):
+        assert _eval_formula("ordinal >> 1", {"ordinal": 8}) == "4"
+
+    def test_unary_minus(self):
+        assert _eval_formula("-ordinal", {"ordinal": 5}) == "-5"
+
+    def test_unary_plus(self):
+        assert _eval_formula("+ordinal", {"ordinal": 5}) == "5"
+
+    def test_string_concatenation(self):
+        # Add with str promotes both sides via f-string.
+        assert (
+            _eval_formula("'host-' + ordinal", {"ordinal": 7})
+            == "host-7"
+        )
+
+    def test_parentheses(self):
+        assert _eval_formula("(ordinal + 1) * 2", {"ordinal": 3}) == "8"
+
+    def test_multiple_variables(self):
+        assert (
+            _eval_formula(
+                "100 + region_id * 10 + ordinal",
+                {"region_id": 3, "ordinal": 2},
+            )
+            == "132"
+        )
+
+    def test_rejects_function_call(self):
+        with pytest.raises(ValueError, match="forbidden node"):
+            _eval_formula("int(ordinal)", {"ordinal": 5})
+
+    def test_rejects_attribute_access(self):
+        with pytest.raises(ValueError, match="forbidden node"):
+            _eval_formula("ordinal.bit_length", {"ordinal": 5})
+
+    def test_rejects_subscript(self):
+        with pytest.raises(ValueError, match="forbidden node"):
+            _eval_formula("name[0]", {"name": "abc"})
+
+    def test_rejects_lambda(self):
+        with pytest.raises(ValueError, match="forbidden node"):
+            _eval_formula("(lambda x: x)(1)", {})
+
+    def test_rejects_list_comprehension(self):
+        with pytest.raises(ValueError, match="forbidden node"):
+            _eval_formula("[x for x in range(3)]", {})
+
+    def test_rejects_unknown_name(self):
+        with pytest.raises(ValueError, match="unknown name"):
+            _eval_formula("ordinal + something_else", {"ordinal": 1})
+
+    def test_rejects_non_int_str_constant(self):
+        with pytest.raises(ValueError, match="constants must be int or str"):
+            _eval_formula("1.5 + ordinal", {"ordinal": 1})
+
+    def test_rejects_syntax_error(self):
+        with pytest.raises(ValueError, match="syntax error"):
+            _eval_formula("1 +", {})
+
+    def test_rejects_int_op_on_string_operand(self):
+        # Mixed-type Sub is rejected — only Add accepts strings.
+        with pytest.raises(ValueError, match="requires int operands"):
+            _eval_formula("ordinal - prefix", {"ordinal": 1, "prefix": "x"})
+
+    def test_rejects_unary_on_string(self):
+        with pytest.raises(ValueError, match="requires int operand"):
+            _eval_formula("-prefix", {"prefix": "x"})
+
+
+# ---------------------------------------------------------------------------
+# _derive_region_id — second-octet convention from network.ip_range
+# ---------------------------------------------------------------------------
+
+
+class TestDeriveRegionId:
+    def test_second_octet_minus_100(self):
+        marker = {
+            "network": {
+                "name": "n",
+                "ip_range": "10.103.0.0/16",
+                "network_zone": "eu-central",
+            }
+        }
+        assert _derive_region_id(marker) == 3
+
+    def test_second_octet_100_yields_zero(self):
+        marker = {"network": {"ip_range": "10.100.0.0/16"}}
+        assert _derive_region_id(marker) == 0
+
+    def test_no_network_block_falls_back_to_zero(self):
+        assert _derive_region_id({}) == 0
+
+    def test_non_mapping_network_falls_back(self):
+        assert _derive_region_id({"network": "garbage"}) == 0
+
+    def test_missing_ip_range_falls_back(self):
+        assert _derive_region_id({"network": {"name": "n"}}) == 0
+
+    def test_malformed_cidr_falls_back(self):
+        assert _derive_region_id({"network": {"ip_range": "not-a-cidr"}}) == 0
+
+    def test_non_10_dot_falls_back(self):
+        assert _derive_region_id({"network": {"ip_range": "192.168.0.0/16"}}) == 0
