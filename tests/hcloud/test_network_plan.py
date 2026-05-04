@@ -32,7 +32,7 @@ from ots_shared.hcloud.network_plan import (
 # ---------------------------------------------------------------------------
 
 
-MARKER_PATH = Path("/tmp/fake/.otsinfra.yaml")
+MARKER_PATH = Path("/tmp/fake/otsinfra.yaml")
 
 
 def _valid_network() -> dict:

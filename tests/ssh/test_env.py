@@ -335,16 +335,16 @@ class TestResolveConfigDir:
 
 
 class TestFindMarker:
-    """Tests for .otsinfra.yaml / .otsinfra.env walk-up discovery."""
+    """Tests for otsinfra.yaml / .otsinfra.env walk-up discovery."""
 
     def test_finds_yaml_marker(self, tmp_path):
-        marker = tmp_path / ".otsinfra.yaml"
+        marker = tmp_path / "otsinfra.yaml"
         marker.write_text("env_name: eu2\n")
         result = find_marker(start=tmp_path)
         assert result == marker
 
     def test_prefers_yaml_over_env(self, tmp_path):
-        yaml_marker = tmp_path / ".otsinfra.yaml"
+        yaml_marker = tmp_path / "otsinfra.yaml"
         yaml_marker.write_text("env_name: eu2\n")
         env_file = tmp_path / ".otsinfra.env"
         env_file.write_text("OTS_HOST=example.com\n")
@@ -363,7 +363,7 @@ class TestFindMarker:
         assert result is None
 
     def test_walks_up_to_find_yaml(self, tmp_path):
-        marker = tmp_path / ".otsinfra.yaml"
+        marker = tmp_path / "otsinfra.yaml"
         marker.write_text("env_name: eu2\n")
         subdir = tmp_path / "deep" / "nested"
         subdir.mkdir(parents=True)
@@ -373,17 +373,17 @@ class TestFindMarker:
 
 
 class TestLoadMarker:
-    """Tests for .otsinfra.yaml parsing."""
+    """Tests for otsinfra.yaml parsing."""
 
     def test_loads_simple_yaml(self, tmp_path):
-        marker = tmp_path / ".otsinfra.yaml"
+        marker = tmp_path / "otsinfra.yaml"
         marker.write_text("env_name: eu2\ncreated: '2026-04-10'\n")
         data = load_marker(marker)
         assert data["env_name"] == "eu2"
         assert data["created"] == "2026-04-10"
 
     def test_empty_file(self, tmp_path):
-        marker = tmp_path / ".otsinfra.yaml"
+        marker = tmp_path / "otsinfra.yaml"
         marker.write_text("")
         data = load_marker(marker)
         assert data == {}
@@ -393,7 +393,7 @@ class TestLoadMarker:
         assert data == {}
 
     def test_comments_ignored(self, tmp_path):
-        marker = tmp_path / ".otsinfra.yaml"
+        marker = tmp_path / "otsinfra.yaml"
         marker.write_text("# marker file\nenv_name: eu2\n")
         data = load_marker(marker)
         assert data["env_name"] == "eu2"
@@ -401,10 +401,10 @@ class TestLoadMarker:
 
 
 class TestResolveConfigDirWithMarker:
-    """resolve_config_dir anchors off .otsinfra.yaml."""
+    """resolve_config_dir anchors off otsinfra.yaml."""
 
     def test_yaml_marker_with_config_sibling(self, tmp_path):
-        marker = tmp_path / ".otsinfra.yaml"
+        marker = tmp_path / "otsinfra.yaml"
         marker.write_text("env_name: eu2\n")
         (tmp_path / "config").mkdir()
 
@@ -412,7 +412,7 @@ class TestResolveConfigDirWithMarker:
         assert result == tmp_path / "config"
 
     def test_yaml_marker_without_config_returns_none(self, tmp_path):
-        marker = tmp_path / ".otsinfra.yaml"
+        marker = tmp_path / "otsinfra.yaml"
         marker.write_text("env_name: eu2\n")
         # No config/ directory
 
@@ -420,7 +420,7 @@ class TestResolveConfigDirWithMarker:
         assert result is None
 
     def test_yaml_marker_walks_up(self, tmp_path):
-        marker = tmp_path / ".otsinfra.yaml"
+        marker = tmp_path / "otsinfra.yaml"
         marker.write_text("env_name: eu2\n")
         (tmp_path / "config").mkdir()
         subdir = tmp_path / "deep"
@@ -432,14 +432,14 @@ class TestResolveConfigDirWithMarker:
     def test_random_config_dir_without_marker_not_found(self, tmp_path):
         """A config/ directory without a marker file is NOT returned."""
         (tmp_path / "config").mkdir()
-        # No .otsinfra.yaml or .otsinfra.env
+        # No otsinfra.yaml or .otsinfra.env
 
         result = resolve_config_dir(start=tmp_path)
         assert result is None
 
 
 class TestGenerateMarker:
-    """Tests for .otsinfra.yaml content generation."""
+    """Tests for otsinfra.yaml content generation."""
 
     def test_basic_content(self):
         content = generate_marker("eu2")
@@ -461,7 +461,7 @@ class TestGenerateMarker:
 
 
 class TestCreateMarker:
-    """Tests for .otsinfra.yaml file creation."""
+    """Tests for otsinfra.yaml file creation."""
 
     def test_creates_file(self, tmp_path):
         path = create_marker(tmp_path, "eu2")

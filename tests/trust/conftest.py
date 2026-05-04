@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
+
 from ots_shared.trust import (
     Manifest,
     ManifestEntry,
@@ -47,7 +48,7 @@ def populated_trust_dir(tmp_path: Path) -> Path:
     Layout produced (matches spec §54):
 
         tmp_path/
-        ├── .otsinfra.yaml          (marker; declares the fixture roles)
+        ├── otsinfra.yaml          (marker; declares the fixture roles)
         └── .trust/
             ├── .gitignore
             ├── manifest.yaml
@@ -60,7 +61,7 @@ def populated_trust_dir(tmp_path: Path) -> Path:
     trust.mkdir(mode=0o700)
 
     # Marker — minimal but valid for the role-declaration tests.
-    (checkout / ".otsinfra.yaml").write_text(
+    (checkout / "otsinfra.yaml").write_text(
         "env_name: test-fixture\n"
         "created: '2026-04-25'\n"
         "hosts:\n"

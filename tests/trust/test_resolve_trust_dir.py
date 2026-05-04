@@ -4,7 +4,7 @@
 
 The shared helper consolidates two near-duplicate ``_resolve_trust_dir``
 implementations that previously lived in ``lots/cloudinit/cli.py`` and
-``lots/trust/cli.py``. It anchors off ``.otsinfra.yaml`` (not the
+``lots/trust/cli.py``. It anchors off ``otsinfra.yaml`` (not the
 ``.trust/`` dir) so a freshly-materialised checkout — or one where
 ``.trust/`` was just rmtree'd by ``--force`` — still resolves a stable
 path. Existence of ``.trust/`` is the caller's responsibility.
@@ -26,14 +26,14 @@ from ots_shared.trust import (  # type: ignore[import-not-found]
 
 
 def _write_marker(checkout: Path) -> None:
-    (checkout / ".otsinfra.yaml").write_text("env_name: test\ncreated: '2026-04-25'\n")
+    (checkout / "otsinfra.yaml").write_text("env_name: test\ncreated: '2026-04-25'\n")
 
 
 # ---- C1: marker at start dir → trust dir alongside it --------------------
 
 
 def test_resolves_trust_dir_when_marker_in_start_dir(tmp_path: Path) -> None:
-    """Marker at ``tmp_path/.otsinfra.yaml`` → returns ``tmp_path/.trust``."""
+    """Marker at ``tmp_path/otsinfra.yaml`` → returns ``tmp_path/.trust``."""
     _write_marker(tmp_path)
     assert resolve_trust_dir(start=tmp_path) == tmp_path / ".trust"
 
@@ -93,9 +93,7 @@ def test_returns_path_without_requiring_trust_dir_to_exist(tmp_path: Path) -> No
 # ---- bonus: default start = cwd -----------------------------------------
 
 
-def test_default_start_uses_cwd(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_default_start_uses_cwd(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """``resolve_trust_dir()`` with no args uses cwd as the walk-up anchor.
 
     Mirrors the ``find_marker(start=None)`` convention elsewhere in

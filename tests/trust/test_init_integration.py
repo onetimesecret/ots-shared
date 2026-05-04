@@ -158,7 +158,7 @@ def test_add_host_materializes_only_new_entry(tmp_path: Path) -> None:
     new_role = "newhost"
     assert new_role not in pre_roles, "test fixture invalid: role already present"
 
-    marker = tmp_path / ".otsinfra.yaml"
+    marker = tmp_path / "otsinfra.yaml"
     text = marker.read_text()
     addition = f"  {new_role}:\n    private_ip_address: 10.0.0.99\n"
     if text.rstrip().endswith(":") or "hosts:" in text:
@@ -259,7 +259,7 @@ def test_wg_serial_centralized_in_keypair_primitive(tmp_path: Path) -> None:
     from ots_shared.trust.init_step import create_trust_material
     from ots_shared.trust.manifest import Manifest
 
-    (tmp_path / ".otsinfra.yaml").write_text(
+    (tmp_path / "otsinfra.yaml").write_text(
         "env_name: test-wg-serial\n"
         "created: '2026-04-25'\n"
         "hosts:\n"

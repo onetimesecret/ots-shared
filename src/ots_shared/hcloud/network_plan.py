@@ -3,7 +3,7 @@
 """Pure logic for the ``network ensure`` reconciler.
 
 This module has no I/O dependencies — no Hetzner API calls, no file
-reads. It accepts an already-loaded ``.otsinfra.yaml`` dict, validates
+reads. It accepts an already-loaded ``otsinfra.yaml`` dict, validates
 the schema, derives per-profile ``/24`` subnets from host private IPs,
 and diffs the desired state against an optionally-supplied current
 network object.
@@ -43,7 +43,7 @@ class SubnetSpec:
 
 @dataclass(frozen=True, slots=True)
 class DesiredState:
-    """The full reconciliation target derived from ``.otsinfra.yaml``.
+    """The full reconciliation target derived from ``otsinfra.yaml``.
 
     ``subnets`` is sorted by numeric ``ip_range`` and deduplicated, so
     the action stream is stable across runs.
@@ -75,7 +75,7 @@ class Action:
 
 
 # ---------------------------------------------------------------------------
-# parse_marker — validate .otsinfra.yaml and produce DesiredState
+# parse_marker — validate otsinfra.yaml and produce DesiredState
 # ---------------------------------------------------------------------------
 
 

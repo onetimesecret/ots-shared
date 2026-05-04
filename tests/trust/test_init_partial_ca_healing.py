@@ -30,8 +30,8 @@ from ots_shared.trust.manifest import Manifest
 
 
 def _make_marker(target: Path) -> None:
-    """Write a minimal ``.otsinfra.yaml`` declaring two host roles."""
-    (target / ".otsinfra.yaml").write_text(
+    """Write a minimal ``otsinfra.yaml`` declaring two host roles."""
+    (target / "otsinfra.yaml").write_text(
         "env_name: test-ca-healing\n"
         "created: '2026-04-25'\n"
         "hosts:\n"

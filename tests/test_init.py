@@ -122,7 +122,7 @@ class TestInitDefaultEnvironmentFallback:
         mock_create_trust_material,
     ):
         """Path('/').resolve().name is '', so environment should fall back to 'default'."""
-        mock_create_marker.return_value = Path("/.otsinfra.yaml")
+        mock_create_marker.return_value = Path("/otsinfra.yaml")
         mock_create_gitignore.return_value = Path("/.gitignore")
         mock_create_envrc_template.return_value = Path("/.envrc")
         mock_load_marker.return_value = {}

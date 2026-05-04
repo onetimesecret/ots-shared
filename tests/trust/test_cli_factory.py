@@ -16,7 +16,7 @@ Wording contract (matches the closure in ``cli.py``):
   to materialize trust material.``
 
 The simplest way to exercise the closure is to invoke any subcommand
-inside a temp dir that has ``.otsinfra.yaml`` (so ``resolve_trust_dir``
+inside a temp dir that has ``otsinfra.yaml`` (so ``resolve_trust_dir``
 succeeds) but no ``.trust/`` directory (so the existence check fails
 and the closure prints).
 """
@@ -45,10 +45,8 @@ def _run_app(app: cyclopts.App, args: list[str]) -> object:
 
 
 def _seed_marker_only(tmp_path: Path) -> None:
-    """Write ``.otsinfra.yaml`` so ``resolve_trust_dir`` succeeds but ``.trust/`` is absent."""
-    (tmp_path / ".otsinfra.yaml").write_text(
-        "env_name: test-cli-factory\ncreated: '2026-04-25'\n"
-    )
+    """Write ``otsinfra.yaml`` so ``resolve_trust_dir`` succeeds but ``.trust/`` is absent."""
+    (tmp_path / "otsinfra.yaml").write_text("env_name: test-cli-factory\ncreated: '2026-04-25'\n")
 
 
 # ---- factory return type --------------------------------------------------

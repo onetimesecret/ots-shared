@@ -20,6 +20,7 @@ import re
 from pathlib import Path
 
 import pytest
+
 from ots_shared.trust.cli import app as trust_app
 from ots_shared.trust.init_step import create_trust_material
 
@@ -32,7 +33,7 @@ def _run_app(app, args: list[str]) -> int | None:
 
 
 def _make_marker(target: Path) -> None:
-    (target / ".otsinfra.yaml").write_text(
+    (target / "otsinfra.yaml").write_text(
         "env_name: roundtrip\n"
         "created: '2026-04-25'\n"
         "hosts:\n"

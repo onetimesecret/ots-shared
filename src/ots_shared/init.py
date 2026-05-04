@@ -2,7 +2,7 @@
 
 """Shared ``init`` sub-app for OTS CLI tools.
 
-Creates the ``.otsinfra.yaml`` marker file that signals "this is an
+Creates the ``otsinfra.yaml`` marker file that signals "this is an
 OTS environment directory" to all OTS tools (lots, pots, rots), plus
 the surrounding scaffold (``.gitignore``, ``.envrc`` template, and the
 ``.trust/`` material).
@@ -55,7 +55,7 @@ def init(
         cyclopts.Parameter(
             help=(
                 "Overwrite existing init files "
-                "(.otsinfra.yaml, .gitignore, .envrc template, .trust/)"
+                "(otsinfra.yaml, .gitignore, .envrc template, .trust/)"
             )
         ),
     ] = False,
@@ -74,7 +74,7 @@ def init(
         ),
     ] = 730,
 ) -> None:
-    """Create .otsinfra.yaml environment marker and supporting scaffold.
+    """Create otsinfra.yaml environment marker and supporting scaffold.
 
     The marker signals to lots, pots, and rots that the directory is
     an OTS environment. Direnv handles env vars; this file carries
@@ -102,13 +102,13 @@ def init(
         path = create_marker(target, environment, hosts=DEFAULT_HOSTS, force=force)
         print(f"Created {path}")
     except FileExistsError:
-        marker_path = target / ".otsinfra.yaml"
+        marker_path = target / "otsinfra.yaml"
         print(f"Marker already exists at {marker_path}")
 
-    # Spec §107: .otsinfra.yaml is the source of truth for the host set.
+    # Spec §107: otsinfra.yaml is the source of truth for the host set.
     # Re-read the marker we just wrote so trust generation uses the canonical
     # roles rather than re-deriving from DEFAULT_HOSTS independently.
-    marker_data = load_marker(target / ".otsinfra.yaml")
+    marker_data = load_marker(target / "otsinfra.yaml")
     marker_hosts = marker_data.get("hosts") if isinstance(marker_data, dict) else None
     if isinstance(marker_hosts, dict) and marker_hosts:
         host_roles = list(marker_hosts.keys())

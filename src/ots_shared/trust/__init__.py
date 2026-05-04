@@ -30,7 +30,7 @@ TRUST_DIRNAME = ".trust"
 
 
 class OtsInfraMarkerMissingError(RuntimeError):
-    """Raised when ``.otsinfra.yaml`` cannot be located via walk-up.
+    """Raised when ``otsinfra.yaml`` cannot be located via walk-up.
 
     The marker anchors the operator checkout root; trust paths derive
     from it. Callers translate this into their own user-facing error
@@ -39,7 +39,7 @@ class OtsInfraMarkerMissingError(RuntimeError):
 
 
 def resolve_trust_dir(start: Path | None = None) -> Path:
-    """Locate ``.trust/`` anchored off the ``.otsinfra.yaml`` marker.
+    """Locate ``.trust/`` anchored off the ``otsinfra.yaml`` marker.
 
     Walk-up discovery uses :func:`ots_shared.ssh.env.find_marker`. The
     returned path is ``<marker_parent>/.trust/`` and may not exist on
@@ -54,8 +54,7 @@ def resolve_trust_dir(start: Path | None = None) -> Path:
     marker = find_marker(start)
     if marker is None:
         raise OtsInfraMarkerMissingError(
-            "no .otsinfra.yaml marker found via walk-up; "
-            "run from inside an OTS environment checkout"
+            "no otsinfra.yaml marker found via walk-up; run from inside an OTS environment checkout"
         )
     return marker.parent / TRUST_DIRNAME
 

@@ -4,7 +4,7 @@
 
 Two file types mark an OTS environment directory:
 
-``.otsinfra.yaml`` (current)
+``otsinfra.yaml`` (current)
     Lightweight YAML marker and metadata. Its presence signals "this is
     an OTS environment directory". Direnv handles all env vars; this file
     carries structured metadata that doesn't belong in shell state.
@@ -12,7 +12,7 @@ Two file types mark an OTS environment directory:
 ``.otsinfra.env`` (legacy)
     KEY=VALUE targeting context for remote execution. Still supported for
     backward compatibility — walk-up discovery falls back to it when
-    ``.otsinfra.yaml`` is not found.
+    ``otsinfra.yaml`` is not found.
 """
 
 from __future__ import annotations
@@ -48,7 +48,7 @@ __all__ = (
     "resolve_env_name",
 )
 
-MARKER_FILENAME = ".otsinfra.yaml"
+MARKER_FILENAME = "otsinfra.yaml"
 ENV_FILENAME = ".otsinfra.env"
 _CONFIG_DIR_PREFIX = "config-v"
 _CONFIG_SYMLINK = "config"
@@ -85,7 +85,7 @@ def _walk_up(filename: str, start: Path | None = None) -> Path | None:
 
 
 def find_marker(start: Path | None = None) -> Path | None:
-    """Walk up looking for ``.otsinfra.yaml``, then ``.otsinfra.env``.
+    """Walk up looking for ``otsinfra.yaml``, then ``.otsinfra.env``.
 
     Prefers the YAML marker. Falls back to the legacy env file so
     existing environments continue to work during migration.
@@ -110,7 +110,7 @@ def find_env_file(start: Path | None = None) -> Path | None:
 
 
 def load_marker(path: Path) -> dict:
-    """Load an ``.otsinfra.yaml`` marker file.
+    """Load an ``otsinfra.yaml`` marker file.
 
     Returns a dict of the YAML contents. Uses a minimal safe loader
     that doesn't require PyYAML — the file format is simple enough
@@ -188,7 +188,7 @@ def generate_marker(
     hosts: dict[str, dict[str, str]] | None = None,
     **metadata: str,
 ) -> str:
-    """Generate ``.otsinfra.yaml`` content.
+    """Generate ``otsinfra.yaml`` content.
 
     Returns YAML text with ``env_name`` and ``created`` fields,
     plus any additional metadata key-value pairs. The signature
@@ -225,7 +225,7 @@ def create_marker(
     hosts: dict[str, dict[str, str]] | None = None,
     **metadata: str,
 ) -> Path:
-    """Create ``.otsinfra.yaml`` in *directory*.
+    """Create ``otsinfra.yaml`` in *directory*.
 
     Returns the path to the created file.
 
@@ -431,7 +431,7 @@ def _resolve_cidr_ip(
 def _derive_region_id(marker: Mapping[str, Any]) -> int:
     """Return ``region_id`` derived from ``network.ip_range``.
 
-    Convention (see examples/environment/.otsinfra.yaml): per-region master
+    Convention (see examples/environment/otsinfra.yaml): per-region master
     /16 sits at ``10.(100 + region_id).0.0/16``. Pull the second octet and
     subtract 100 when ``network.ip_range`` follows the pattern. Returns 0
     when no convention-matching network block is present (eu-1 grandfather).
@@ -544,7 +544,7 @@ def resolve_env_name(marker: Mapping[str, Any] | None) -> str:
     if marker_value is None:
         # The contract: marker is required (even when $ENV_NAME is set).
         raise MarkerEnvNameMissing(
-            "marker has no 'env_name' field; add `env_name: <env>` to .otsinfra.yaml "
+            "marker has no 'env_name' field; add `env_name: <env>` to otsinfra.yaml "
             "(operators may also set $ENV_NAME, but the marker is the source of truth)"
         )
 
@@ -560,7 +560,7 @@ def resolve_env_name(marker: Mapping[str, Any] | None) -> str:
 
 @dataclass(frozen=True, slots=True)
 class MarkerNetwork:
-    """Top-level ``network:`` block in ``.otsinfra.yaml``.
+    """Top-level ``network:`` block in ``otsinfra.yaml``.
 
     Holds the per-environment Hetzner network identity used by
     ``lots hcloud network ensure`` and consumed as a default by
@@ -651,7 +651,7 @@ def generate_envrc_template() -> str:
     """Generate a template ``.envrc`` for a new OTS environment.
 
     Values are empty — the operator fills them in after generating
-    credentials. Host IPs live in ``.otsinfra.yaml``, not here.
+    credentials. Host IPs live in ``otsinfra.yaml``, not here.
     """
     lines = [
         "# .envrc — otsinfra environment",
@@ -663,7 +663,7 @@ def generate_envrc_template() -> str:
         'export HCLOUD_TOKEN="<paste-token-here>"',
         'export RABBITMQ_PASS=""',
         "",
-        "# Host IPs defined in .otsinfra.yaml",
+        "# Host IPs defined in otsinfra.yaml",
         "",
         "# Inherited from ancestor .envrc — uncomment to override",
         "# JURISDICTION=EU",
@@ -749,7 +749,7 @@ def resolve_config_dir(start: Path | None = None) -> Path | None:
 
     Resolution order:
         1. ``$OTS_CONFIG_DIR`` environment variable (explicit override).
-        2. ``config/`` sibling to a ``.otsinfra.yaml`` or ``.otsinfra.env``
+        2. ``config/`` sibling to a ``otsinfra.yaml`` or ``.otsinfra.env``
            marker (walk-up discovery confirms we're in an OTS environment).
         3. OTS_TAG from ``.otsinfra.env`` → versioned directory name
            (e.g. ``v0.24`` → ``config-v0.24``). Legacy path.

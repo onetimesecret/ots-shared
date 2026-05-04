@@ -13,6 +13,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+
 from ots_shared.trust.cli import app
 from ots_shared.trust.manifest import Manifest
 
@@ -38,7 +39,7 @@ def _set_marker_hosts(checkout: Path, *roles: str) -> None:
         for role in roles:
             lines.append(f"  {role}:")
             lines.append(f"    private_ip_address: 10.0.0.{1 + roles.index(role)}")
-    (checkout / ".otsinfra.yaml").write_text("\n".join(lines) + "\n")
+    (checkout / "otsinfra.yaml").write_text("\n".join(lines) + "\n")
 
 
 # ---- happy path -----------------------------------------------------------
@@ -113,7 +114,7 @@ def test_prune_refuses_ca_role(populated_trust_dir: Path, monkeypatch, capsys) -
 def test_prune_refuses_declared_host_without_flag(
     populated_trust_dir: Path, monkeypatch, capsys
 ) -> None:
-    """Safety default: refusing to prune a host still declared in .otsinfra.yaml.
+    """Safety default: refusing to prune a host still declared in otsinfra.yaml.
 
     The fixture leaves ``web`` declared. Without ``--declared-ok`` the
     command must refuse and leave the host material in place.
@@ -121,7 +122,7 @@ def test_prune_refuses_declared_host_without_flag(
     app = _import_app()
     monkeypatch.chdir(populated_trust_dir)
     # Sanity: confirm web is declared.
-    assert "web:" in (populated_trust_dir / ".otsinfra.yaml").read_text()
+    assert "web:" in (populated_trust_dir / "otsinfra.yaml").read_text()
 
     rc = _run_app(app, ["prune", "web", "--yes"])
     capsys.readouterr()
