@@ -18,7 +18,7 @@ import ipaddress
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, NoReturn
+from typing import Any, NoReturn, cast
 
 from .zones import KNOWN_ZONES, LOCATION_TO_ZONE
 
@@ -217,7 +217,10 @@ def _derive_subnets(
             #     /24 so the full declared range reaches the reconciler
             #     instead of silently truncating to the first /24.
             if host_cidr.prefixlen >= 24:
-                enclosing = ipaddress.ip_network(f"{host_cidr.network_address}/24", strict=False)
+                enclosing = cast(
+                    ipaddress.IPv4Network,
+                    ipaddress.ip_network(f"{host_cidr.network_address}/24", strict=False),
+                )
                 slash24s: tuple[ipaddress.IPv4Network, ...] = (enclosing,)
             else:
                 slash24s = tuple(host_cidr.subnets(new_prefix=24))
