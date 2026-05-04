@@ -90,6 +90,42 @@ class TestInitErrorCases:
             app(["env1", "--directory", str(nonexistent)])
         assert exc_info.value.code == 1
 
+    def test_existing_nonempty_trust_dir_fails_fast(self, tmp_path):
+        """Fail if .trust/ exists without a marker (orphan trust material)."""
+        trust_dir = tmp_path / ".trust"
+        trust_dir.mkdir()
+        (trust_dir / "ca.crt").write_text("existing cert\n")
+        with pytest.raises(SystemExit) as exc_info:
+            app(["env1", "--directory", str(tmp_path)])
+        assert exc_info.value.code == 1
+
+    def test_existing_trust_with_marker_allows_rerun(self, tmp_path):
+        """Re-running init with existing marker + .trust/ is allowed (incremental add)."""
+        # First run creates everything
+        with pytest.raises(SystemExit):
+            app(["env1", "--directory", str(tmp_path)])
+        # Second run should succeed (not blocked by existing .trust/)
+        with pytest.raises(SystemExit) as exc_info:
+            app(["env1", "--directory", str(tmp_path)])
+        assert exc_info.value.code is None or exc_info.value.code == 0
+
+    def test_existing_nonempty_trust_dir_with_force_succeeds(self, tmp_path):
+        """--force allows overwriting existing .trust/."""
+        trust_dir = tmp_path / ".trust"
+        trust_dir.mkdir()
+        (trust_dir / "ca.crt").write_text("existing cert\n")
+        with pytest.raises(SystemExit) as exc_info:
+            app(["env1", "--directory", str(tmp_path), "--force"])
+        assert exc_info.value.code is None or exc_info.value.code == 0
+
+    def test_existing_empty_trust_dir_succeeds(self, tmp_path):
+        """Empty .trust/ directory does not block init."""
+        trust_dir = tmp_path / ".trust"
+        trust_dir.mkdir()
+        with pytest.raises(SystemExit) as exc_info:
+            app(["env1", "--directory", str(tmp_path)])
+        assert exc_info.value.code is None or exc_info.value.code == 0
+
     def test_existing_scaffold_without_force_still_creates_marker(self, tmp_path):
         """When .gitignore/.envrc exist but marker does not, marker is created
         and warnings are emitted for the scaffold files."""
@@ -108,6 +144,7 @@ class TestInitErrorCases:
 class TestInitDefaultEnvironmentFallback:
     """Edge case: environment falls back to 'default' when directory name is empty."""
 
+    @patch("ots_shared.init.create_ssh_config")
     @patch("ots_shared.init.create_trust_material")
     @patch("ots_shared.init.load_marker")
     @patch("ots_shared.init.create_envrc_template")
@@ -120,6 +157,7 @@ class TestInitDefaultEnvironmentFallback:
         mock_create_envrc_template,
         mock_load_marker,
         mock_create_trust_material,
+        mock_create_ssh_config,
     ):
         """Path('/').resolve().name is '', so environment should fall back to 'default'."""
         mock_create_marker.return_value = Path("/otsinfra.yaml")
@@ -127,6 +165,7 @@ class TestInitDefaultEnvironmentFallback:
         mock_create_envrc_template.return_value = Path("/.envrc")
         mock_load_marker.return_value = {}
         mock_create_trust_material.return_value = Path("/.trust")
+        mock_create_ssh_config.return_value = Path("/.ssh/config")
 
         init(directory=Path("/"))
 

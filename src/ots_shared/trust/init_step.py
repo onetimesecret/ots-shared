@@ -28,15 +28,17 @@ from .ca import generate_ca
 from .manifest import Manifest
 
 _TRUST_GITIGNORE = """\
+# .trust/.gitignore — self-contained; delete .trust/ to start fresh.
+#
 # Cleartext private halves never enter version control.
-# The age-sealed ``*.age`` form is the only committable shape.
+# Only the age-sealed (*.age) form and public material are committable.
 *
+!.gitignore
+!manifest.yaml
 !*.age
 !*.pub
 !*.crt
 !cert.pem
-!manifest.yaml
-!.gitignore
 !ca/
 !hosts/
 !hosts/*/

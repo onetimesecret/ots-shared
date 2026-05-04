@@ -26,6 +26,7 @@ from ots_shared.ssh.env import (
     create_envrc_template,
     create_gitignore,
     create_marker,
+    create_ssh_config,
     load_marker,
 )
 from ots_shared.trust.init_step import create_trust_material
@@ -80,18 +81,36 @@ def init(
     an OTS environment. Direnv handles env vars; this file carries
     structured metadata (environment name, creation date).
 
+    Idempotent: re-running init is safe. Existing files are preserved
+    and only missing entries are materialized. To add a new host, edit
+    otsinfra.yaml and re-run — only the new host's keypairs are generated.
+    Use --force to regenerate everything (destructive).
+
     When no environment name is given, uses the directory name.
 
     Examples:
         lots init              # uses current directory name
-        pots init              # same command, same result
-        lots init eu2
-        pots init -C ~/ops/environments/non-prod/eu2
+        lots init eu2          # explicit environment name
+        lots init              # re-run to add hosts from edited marker
+        lots init --force      # regenerate all trust material
     """
     target = directory.resolve()
     environment = environment or target.name or "default"
     if not target.is_dir():
         print(f"Error: {target} is not a directory", file=sys.stderr)
+        sys.exit(1)
+
+    # Fail fast if .trust/ exists without a marker (orphan trust material).
+    # Re-running init with an existing marker is allowed — that's the
+    # incremental "add new host" path (Spec §6 / AC #2).
+    trust_dir = target / ".trust"
+    marker_path = target / "otsinfra.yaml"
+    if not force and trust_dir.is_dir() and any(trust_dir.iterdir()) and not marker_path.exists():
+        print(
+            f"Error: {trust_dir} already exists and is not empty.\n"
+            "Use --force to regenerate trust material (destructive).",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     # Spec §6 / AC #2: re-running init() must materialize new host entries.
@@ -124,7 +143,21 @@ def init(
             leaf_days=leaf_days,
         )
 
-    for create_fn in (create_gitignore, create_envrc_template, _trust_step):
+    def _ssh_config_step(target: Path, *, force: bool = False) -> Path:
+        # Use marker_data if it's a valid dict with hosts, else use DEFAULT_HOSTS
+        effective_marker: dict = {}
+        if isinstance(marker_data, dict):
+            effective_marker = marker_data
+        if not effective_marker.get("hosts"):
+            effective_marker = {"hosts": DEFAULT_HOSTS}
+        return create_ssh_config(
+            target,
+            effective_marker,
+            environment,
+            force=force,
+        )
+
+    for create_fn in (create_gitignore, create_envrc_template, _trust_step, _ssh_config_step):
         try:
             path = create_fn(target, force=force)
             print(f"Created {path}")
