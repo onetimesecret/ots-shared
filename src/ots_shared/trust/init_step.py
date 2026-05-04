@@ -28,16 +28,19 @@ from .ca import generate_ca
 from .manifest import Manifest
 
 _TRUST_GITIGNORE = """\
+# .trust/.gitignore — self-contained; delete .trust/ to start fresh.
+#
 # Cleartext private halves never enter version control.
-# The age-sealed ``*.age`` form is the only committable shape.
+# Only the age-sealed (*.age) form and public material are committable.
 *
+!.gitignore
+!manifest.yaml
 !*.age
 !*.pub
 !*.crt
 !cert.pem
-!manifest.yaml
-!.gitignore
 !ca/
+!deploy/
 !hosts/
 !hosts/*/
 !socks/
@@ -178,6 +181,34 @@ def create_trust_material(
                 )
             )
             print(f"socks ssh {kp.fingerprint}")
+
+        # Deploy keypairs (operator workstation identity). SSH key is used
+        # by the operator to SSH into provisioned hosts; WG key is the
+        # operator's peer identity on the WireGuard mesh.
+        deploy_dir = ensure_dir(trust_root / "deploy")
+        if not _ssh_files_present(deploy_dir):
+            kp = generate_keypair("ssh", "deploy", deploy_dir)
+            manifest.upsert(
+                make_manifest_entry(
+                    name="deploy",
+                    key_type="ssh",
+                    fingerprint=kp.fingerprint,
+                    serial=kp.serial or 0,
+                )
+            )
+            print(f"deploy ssh {kp.fingerprint}")
+
+        if not _wg_files_present(deploy_dir):
+            kp = generate_keypair("wg", "deploy", deploy_dir, ca=ca)
+            manifest.upsert(
+                make_manifest_entry(
+                    name="deploy",
+                    key_type="wg",
+                    fingerprint=kp.fingerprint,
+                    serial=kp.serial or 0,
+                )
+            )
+            print(f"deploy wg {kp.fingerprint}")
 
         manifest.save(manifest_path(trust_root))
         _write_trust_gitignore(trust_root)

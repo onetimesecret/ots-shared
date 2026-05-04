@@ -252,9 +252,9 @@ def test_wg_serial_centralized_in_keypair_primitive(tmp_path: Path) -> None:
     ``generate_keypair("wg", ...)`` and reads ``Keypair.serial`` rather
     than calling ``next_serial(ca)`` itself. The user-visible invariant:
     a single-host clean init advances the per-CA serial counter by
-    exactly 2 (WG mint → 1, TLS mint → 2). If anyone reintroduces a
-    second ``next_serial`` call in the orchestrator, the counter lands
-    at 3 and this test fails.
+    exactly 3 (web WG → 1, web TLS → 2, deploy WG → 3). If anyone
+    reintroduces a second ``next_serial`` call in the orchestrator, the
+    counter lands higher and this test fails.
     """
     from ots_shared.trust.init_step import create_trust_material
     from ots_shared.trust.manifest import Manifest
@@ -271,12 +271,9 @@ def test_wg_serial_centralized_in_keypair_primitive(tmp_path: Path) -> None:
 
     trust = tmp_path / ".trust"
     serial_text = (trust / "ca" / "serial").read_text()
-    # Counter starts at 0; WG mint allocates 1, TLS mint allocates 2.
-    # No third ``next_serial`` call anywhere → file reads "2\n".
-    assert serial_text == "2\n", (
-        f"per-CA serial counter must read '2\\n' after a single-host init; "
-        f"got {serial_text!r}. A value of 3 means generate_keypair AND the "
-        f"orchestrator both called next_serial for wg."
+    # Counter starts at 0; web WG=1, web TLS=2, deploy WG=3.
+    assert serial_text == "3\n", (
+        f"per-CA serial counter must read '3\\n' after a single-host init; got {serial_text!r}."
     )
 
     # Manifest sanity: web/wg has a positive serial and it matches one of
@@ -293,6 +290,11 @@ def test_wg_serial_centralized_in_keypair_primitive(tmp_path: Path) -> None:
     tls_entry = manifest.get("web", "tls")
     assert tls_entry is not None
     assert tls_entry.serial == 2, f"web/tls expected serial 2; got {tls_entry.serial}"
+
+    # Deploy WG keypair (operator workstation identity) gets serial 3.
+    deploy_wg = manifest.get("deploy", "wg")
+    assert deploy_wg is not None, "manifest must carry deploy/wg entry"
+    assert deploy_wg.serial == 3, f"deploy/wg expected serial 3; got {deploy_wg.serial}"
 
 
 def test_default_validity_when_flags_absent(tmp_path: Path) -> None:
