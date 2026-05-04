@@ -90,7 +90,7 @@ class TestFormatTraffic:
 # stage a synthetic marker without touching the filesystem walk-up logic.
 
 
-FAKE_MARKER = Path("/tmp/fake/.otsinfra.yaml")
+FAKE_MARKER = Path("/tmp/fake/otsinfra.yaml")
 
 
 def _patched(hosts: dict | None, *, marker_missing: bool = False, env_name: str = "test"):
@@ -158,9 +158,7 @@ class TestResolveHostDefaultsFailLoud:
         # the longest-suffix that matches a hosts key wins deterministically.
         # ``test-prod-web-01`` against ``{web, prod-web}`` resolves to
         # ``prod-web`` (longer suffix) instead of ``web``.
-        find, load = _patched(
-            {"web": {"server_type": "cx11"}, "prod-web": {"server_type": "cx22"}}
-        )
+        find, load = _patched({"web": {"server_type": "cx11"}, "prod-web": {"server_type": "cx22"}})
         with find, load:
             result = resolve_host_defaults(role=None, name="test-prod-web-01")
         assert result is not None
@@ -365,7 +363,7 @@ class TestMarkerFieldTable:
 
 
 # ---------------------------------------------------------------------------
-# End-to-end trace against the real examples/environment/.otsinfra.yaml shape
+# End-to-end trace against the real examples/environment/otsinfra.yaml shape
 # ---------------------------------------------------------------------------
 #
 # Library-only subset. The CLI test that drives `lots.hcloud.commands.server.app.create`
@@ -416,7 +414,7 @@ class TestProfilesFixtureResolution:
     # When --role is supplied the parser is bypassed (explicit wins), so
     # the env_name pinned in the patched marker is irrelevant for these
     # cases. Kept at "profiles" so the synthetic marker still resembles
-    # the real examples/environment/.otsinfra.yaml shape.
+    # the real examples/environment/otsinfra.yaml shape.
 
     def test_web_role_pulls_four_str_defaults(self):
         # Resolve `web` and assert the 4 str per-host marker fields
@@ -529,7 +527,7 @@ class TestMarkerNetworkName:
                 },
             ),
         ):
-            result = marker_network_name(marker_path=Path("/explicit/.otsinfra.yaml"))
+            result = marker_network_name(marker_path=Path("/explicit/otsinfra.yaml"))
         assert result == "explicit-net"
         find_mock.assert_not_called()
 

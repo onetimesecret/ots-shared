@@ -8,7 +8,7 @@ subnet must belong to that same zone. Servers are deployed in
 the network's zone or attaching the server to the network fails.
 
 These constants exist as a single source of truth so the
-``network ensure`` reconciler can validate ``.otsinfra.yaml`` without
+``network ensure`` reconciler can validate ``otsinfra.yaml`` without
 making an API call.
 """
 

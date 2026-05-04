@@ -16,6 +16,7 @@ import contextlib
 from pathlib import Path
 
 import pytest
+
 from ots_shared.trust.manifest import Manifest
 
 
@@ -37,7 +38,7 @@ def test_prune_calls_trust_flock_with_checkout_root(
 
     Patch the symbol the prune module looks up at call time and record
     each invocation's argument. The lock target must be the checkout
-    directory (where ``.otsinfra.yaml`` lives), NOT ``.trust/`` — locking
+    directory (where ``otsinfra.yaml`` lives), NOT ``.trust/`` — locking
     on ``.trust/`` would break under ``--force`` rmtree because the
     inode the lock fd holds gets unlinked.
     """
@@ -165,7 +166,7 @@ def _set_marker(checkout: Path, *roles: str) -> None:
         for role in roles:
             lines.append(f"  {role}:")
             lines.append(f"    private_ip_address: 10.0.0.{1 + roles.index(role)}")
-    (checkout / ".otsinfra.yaml").write_text("\n".join(lines) + "\n")
+    (checkout / "otsinfra.yaml").write_text("\n".join(lines) + "\n")
 
 
 # Keep the manifest import live so a future test that wants to assert

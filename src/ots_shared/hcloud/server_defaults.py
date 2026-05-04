@@ -1,6 +1,6 @@
 # src/ots_shared/hcloud/server_defaults.py
 
-"""Library helpers for resolving Hetzner server defaults from .otsinfra.yaml.
+"""Library helpers for resolving Hetzner server defaults from otsinfra.yaml.
 
 The library subset of what used to live under
 ``lots.hcloud.commands.server._helpers``. CLI presentation helpers
@@ -31,7 +31,7 @@ USER_DATA_LIMIT_BYTES = 32 * 1024
 # ---------------------------------------------------------------------------
 #
 # The single source of truth for which CLI flags on `server create` can be
-# defaulted from `hosts.<role>` in .otsinfra.yaml. One row == one flag.
+# defaulted from `hosts.<role>` in otsinfra.yaml. One row == one flag.
 #
 # To add a marker-backed flag:
 #   1. Add a `MarkerField(...)` entry below with the marker key (as written
@@ -154,7 +154,7 @@ def _coerce_marker_value(
 
 @dataclass(frozen=True, slots=True)
 class HostDefaults:
-    """Typed defaults resolved from .otsinfra.yaml for a single host role.
+    """Typed defaults resolved from otsinfra.yaml for a single host role.
 
     ``values`` maps marker key -> validated Python value. ``role`` is the
     resolved role key (explicit or auto-matched). ``marker_path`` is the
@@ -183,7 +183,7 @@ class HostDefaults:
 
 
 def resolve_host_defaults(role: str | None, name: str) -> HostDefaults | None:
-    """Resolve server create defaults from .otsinfra.yaml.
+    """Resolve server create defaults from otsinfra.yaml.
 
     Picks a host role either from an explicit ``role`` argument or — when
     unset — by delegating to :func:`ots_shared.ssh.hostname.parse_hostname`,
@@ -269,7 +269,7 @@ def resolve_host_defaults(role: str | None, name: str) -> HostDefaults | None:
 
 
 def marker_network_name(marker_path: Path | None = None) -> str | None:
-    """Return the top-level ``network.name`` from ``.otsinfra.yaml``.
+    """Return the top-level ``network.name`` from ``otsinfra.yaml``.
 
     Walks up from cwd to find the marker (or uses ``marker_path`` if
     given). Returns ``None`` when no marker is found, when the marker

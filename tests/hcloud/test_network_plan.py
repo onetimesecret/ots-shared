@@ -32,7 +32,7 @@ from ots_shared.hcloud.network_plan import (
 # ---------------------------------------------------------------------------
 
 
-MARKER_PATH = Path("/tmp/fake/.otsinfra.yaml")
+MARKER_PATH = Path("/tmp/fake/otsinfra.yaml")
 
 
 def _valid_network() -> dict:
@@ -380,17 +380,13 @@ class TestParseMarkerCidrAndOrdinals:
         assert "private_ip_cidr" in capsys.readouterr().err
 
     def test_cidr_invalid_string_fails_loud(self):
-        marker = _marker_with_hosts(
-            {"web": {"private_ip_cidr": "not-a-cidr", "location": "nbg1"}}
-        )
+        marker = _marker_with_hosts({"web": {"private_ip_cidr": "not-a-cidr", "location": "nbg1"}})
         with pytest.raises(SystemExit) as exc:
             parse_marker(marker, marker_path=MARKER_PATH)
         assert exc.value.code == 65
 
     def test_cidr_wrong_type_fails_loud(self):
-        marker = _marker_with_hosts(
-            {"web": {"private_ip_cidr": 24, "location": "nbg1"}}
-        )
+        marker = _marker_with_hosts({"web": {"private_ip_cidr": 24, "location": "nbg1"}})
         with pytest.raises(SystemExit) as exc:
             parse_marker(marker, marker_path=MARKER_PATH)
         assert exc.value.code == 65

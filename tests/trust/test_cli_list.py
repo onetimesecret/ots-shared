@@ -4,7 +4,7 @@
 
 ``trust list`` shows three buckets:
 
-* hosts present in both ``.otsinfra.yaml`` and ``.trust/hosts/``
+* hosts present in both ``otsinfra.yaml`` and ``.trust/hosts/``
 * hosts declared in the marker but not yet materialised
 * hosts on disk but no longer declared in the marker
 """
@@ -14,6 +14,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+
 from ots_shared.trust.cli import app
 
 
@@ -29,7 +30,7 @@ def _run_app(app, args: list[str]) -> int | None:
 
 
 def _set_marker_hosts(checkout: Path, *roles: str) -> None:
-    """Rewrite ``.otsinfra.yaml`` declaring exactly *roles*."""
+    """Rewrite ``otsinfra.yaml`` declaring exactly *roles*."""
     lines = [
         "env_name: test-fixture",
         "created: '2026-04-25'",
@@ -39,7 +40,7 @@ def _set_marker_hosts(checkout: Path, *roles: str) -> None:
         for role in roles:
             lines.append(f"  {role}:")
             lines.append(f"    private_ip_address: 10.0.0.{1 + roles.index(role)}")
-    (checkout / ".otsinfra.yaml").write_text("\n".join(lines) + "\n")
+    (checkout / "otsinfra.yaml").write_text("\n".join(lines) + "\n")
 
 
 def test_list_shows_present_in_both(populated_trust_dir: Path, monkeypatch, capsys) -> None:
@@ -113,7 +114,7 @@ def test_list_shows_on_disk_undeclared(populated_trust_dir: Path, monkeypatch, c
 
 
 def _set_marker_with_socks(checkout: Path, *roles: str, declare_socks: bool) -> None:
-    """Rewrite ``.otsinfra.yaml`` with hosts and an optional ``socks: {}`` block.
+    """Rewrite ``otsinfra.yaml`` with hosts and an optional ``socks: {}`` block.
 
     The exact marker shape for a "declared" socks entry is the
     production agent's call — the spec only requires the list output
@@ -129,7 +130,7 @@ def _set_marker_with_socks(checkout: Path, *roles: str, declare_socks: bool) -> 
     if declare_socks:
         lines.append("socks:")
         lines.append("  enabled: true")
-    (checkout / ".otsinfra.yaml").write_text("\n".join(lines) + "\n")
+    (checkout / "otsinfra.yaml").write_text("\n".join(lines) + "\n")
 
 
 def test_list_includes_socks_when_present(populated_trust_dir: Path, monkeypatch, capsys) -> None:

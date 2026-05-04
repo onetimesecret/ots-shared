@@ -7,7 +7,7 @@ implementation in ``ots_shared.trust``. They never generate material.
 
 Subcommands:
     fingerprints   Print fingerprints from the manifest for runbook verification.
-    list           Show on-disk hosts vs. the host set declared in .otsinfra.yaml.
+    list           Show on-disk hosts vs. the host set declared in otsinfra.yaml.
     prune          Remove a host's material and manifest entries.
 
 The subapp is built via :func:`make_trust_app`, which lets the parent CLI
@@ -99,7 +99,7 @@ def make_trust_app(tool_name: str | None = None) -> cyclopts.App:
             trust_dir = resolve_trust_dir()
         except OtsInfraMarkerMissingError:
             print(
-                "Error: .otsinfra.yaml not found; run from inside an OTS environment.",
+                "Error: otsinfra.yaml not found; run from inside an OTS environment.",
                 file=sys.stderr,
             )
             sys.exit(1)
@@ -131,7 +131,7 @@ def make_trust_app(tool_name: str | None = None) -> cyclopts.App:
 
     @app.command(name="list")
     def list_() -> None:
-        """Show on-disk hosts vs. host set declared in .otsinfra.yaml.
+        """Show on-disk hosts vs. host set declared in otsinfra.yaml.
 
         Output sections (in this order):
             present in both
@@ -189,7 +189,7 @@ def make_trust_app(tool_name: str | None = None) -> cyclopts.App:
             bool,
             cyclopts.Parameter(
                 name="--declared-ok",
-                help="Allow pruning even if the role is still declared in .otsinfra.yaml.",
+                help="Allow pruning even if the role is still declared in otsinfra.yaml.",
             ),
         ] = False,
         yes: Annotated[
@@ -204,7 +204,7 @@ def make_trust_app(tool_name: str | None = None) -> cyclopts.App:
 
         Deletes ``.trust/hosts/<role>/`` and removes the corresponding manifest
         entries. The CA cannot be pruned through this command. By default, a
-        role still declared in ``.otsinfra.yaml`` is refused — silently pruning
+        role still declared in ``otsinfra.yaml`` is refused — silently pruning
         a declared host courts a re-init that quietly regenerates material with
         a different fingerprint, breaking deployed peers. ``--declared-ok``
         overrides this when the operator has already removed the host from the
@@ -226,7 +226,7 @@ def make_trust_app(tool_name: str | None = None) -> cyclopts.App:
         declared = _declared_roles()
         if role in declared and not declared_ok:
             print(
-                f"Error: role '{role}' is still declared in .otsinfra.yaml; "
+                f"Error: role '{role}' is still declared in otsinfra.yaml; "
                 "remove it from the marker first or pass --declared-ok.",
                 file=sys.stderr,
             )

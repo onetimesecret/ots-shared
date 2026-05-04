@@ -20,7 +20,7 @@ from ots_shared.trust.init_step import create_trust_material
 
 
 def _make_marker(target: Path) -> None:
-    (target / ".otsinfra.yaml").write_text(
+    (target / "otsinfra.yaml").write_text(
         "env_name: test-partial\n"
         "created: '2026-04-25'\n"
         "hosts:\n"
@@ -125,6 +125,5 @@ def test_partial_host_heals_when_only_tls_missing(tmp_path: Path) -> None:
     # no bump for either ssh entry. Counter sits at 3 after the run, so
     # the next allocation returns 4.
     assert next_serial(ca) == 4, (
-        "expected three serial bumps (web tls + db wg + db tls); "
-        "serial counter disagrees"
+        "expected three serial bumps (web tls + db wg + db tls); serial counter disagrees"
     )

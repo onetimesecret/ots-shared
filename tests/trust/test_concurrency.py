@@ -108,11 +108,11 @@ def _run_create_then_raise(target: str) -> str:
 
 
 def _seed_marker(target: Path) -> None:
-    """Write a minimal .otsinfra.yaml so create_trust_material has a host set.
+    """Write a minimal otsinfra.yaml so create_trust_material has a host set.
 
     Keeps the test independent of the marker generator's exact output.
     """
-    (target / ".otsinfra.yaml").write_text(
+    (target / "otsinfra.yaml").write_text(
         "env_name: test-conc\n"
         "created: '2026-04-25'\n"
         "hosts:\n"
@@ -162,15 +162,11 @@ def test_two_concurrent_inits_converge_under_flock(tmp_path: Path) -> None:
     # If create_trust_material doesn't exist yet, both will return an
     # ERROR:import:... sentinel. Surface that as a clear test failure
     # rather than crashing on the assertion below.
-    assert all(not r.startswith("ERROR:") for r in results), (
-        f"workers errored: {results}"
-    )
+    assert all(not r.startswith("ERROR:") for r in results), f"workers errored: {results}"
 
     # Both must have observed the same CA fingerprint after their call —
     # i.e. the second invocation did not regenerate.
-    assert results[0] == results[1], (
-        f"concurrent workers diverged: {results}"
-    )
+    assert results[0] == results[1], f"concurrent workers diverged: {results}"
 
     # And the on-disk fingerprint after both finish must agree.
     from ots_shared.trust.ca import load_ca
@@ -264,9 +260,7 @@ def _run_force_create(target: str) -> str:
         return f"ERROR:import:{exc!r}"
 
     try:
-        create_trust_material(
-            _Path(target), hosts=_HOSTS_FOR_WORKER, force=True
-        )
+        create_trust_material(_Path(target), hosts=_HOSTS_FOR_WORKER, force=True)
     except Exception as exc:
         return f"ERROR:run:{exc!r}"
 
@@ -310,9 +304,7 @@ def test_force_race_does_not_corrupt_trust_state(tmp_path: Path) -> None:
     p_slow.join(timeout=30)
     p_force.join(timeout=30)
 
-    assert p_slow.exitcode == 0, (
-        f"slow worker did not finish cleanly (exitcode={p_slow.exitcode})"
-    )
+    assert p_slow.exitcode == 0, f"slow worker did not finish cleanly (exitcode={p_slow.exitcode})"
     assert p_force.exitcode == 0, (
         f"--force worker did not finish cleanly (exitcode={p_force.exitcode})"
     )

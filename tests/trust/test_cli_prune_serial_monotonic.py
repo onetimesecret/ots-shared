@@ -19,6 +19,7 @@ from pathlib import Path
 
 import pytest
 from cryptography import x509
+
 from ots_shared.trust import generate_keypair
 from ots_shared.trust.ca import load_ca, next_serial
 from ots_shared.trust.cli import app as trust_app
@@ -40,7 +41,7 @@ def _set_marker_hosts(checkout: Path, *roles: str) -> None:
         for role in roles:
             lines.append(f"  {role}:")
             lines.append(f"    private_ip_address: 10.0.0.{1 + roles.index(role)}")
-    (checkout / ".otsinfra.yaml").write_text("\n".join(lines) + "\n")
+    (checkout / "otsinfra.yaml").write_text("\n".join(lines) + "\n")
 
 
 def test_serial_strictly_advances_after_prune(
