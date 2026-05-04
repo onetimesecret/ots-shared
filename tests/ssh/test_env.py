@@ -673,16 +673,37 @@ class TestGetHostIp:
             },
             "hosts": {
                 "web": {
-                    "private_ip_cidr": "10.103.5.0/24",
+                    # CIDR must contain the formula output. /20 covers
+                    # 10.103.0.0–10.103.15.255 so any (region 3, ordinal
+                    # 0..15) lands in range.
+                    "private_ip_cidr": "10.103.0.0/20",
                     "private_ip_assignment_type": "calculated",
-                    "private_ip_formula": (
-                        "'10.' + (100 + region_id) + '.' + ordinal + '.11'"
-                    ),
+                    "private_ip_formula": ("'10.' + (100 + region_id) + '.' + ordinal + '.11'"),
                 },
             },
         }
         # region_id=3 (second octet 103 - 100), ordinal=2 → 10.103.2.11.
         assert get_host_ip(marker, "web", "02") == "10.103.2.11"
+
+    def test_cidr_calculated_formula_outside_cidr_fails_loud(self):
+        # Formula produces 10.103.2.11 but private_ip_cidr is 10.103.5.0/24
+        # — out of range. Must raise rather than silently returning.
+        marker = {
+            "network": {
+                "name": "n",
+                "ip_range": "10.103.0.0/16",
+                "network_zone": "eu-central",
+            },
+            "hosts": {
+                "web": {
+                    "private_ip_cidr": "10.103.5.0/24",
+                    "private_ip_assignment_type": "calculated",
+                    "private_ip_formula": ("'10.' + (100 + region_id) + '.' + ordinal + '.11'"),
+                },
+            },
+        }
+        with pytest.raises(ValueError, match="outside private_ip_cidr"):
+            get_host_ip(marker, "web", "02")
 
     def test_cidr_in_order_overflow_fails_loud(self):
         marker = {"hosts": {"web": {"private_ip_cidr": "10.101.1.0/29"}}}
@@ -729,6 +750,12 @@ class TestGetHostIp:
         marker = {"hosts": {"web": "not-a-dict"}}
         assert get_host_ip(marker, "web", "01") is None
 
+    def test_non_dict_hosts_block_returns_none(self):
+        # Malformed marker where hosts: is a list/scalar instead of a
+        # mapping. Must not raise AttributeError from .get on a list.
+        assert get_host_ip({"hosts": ["web", "db"]}, "web", "01") is None
+        assert get_host_ip({"hosts": "garbage"}, "web", "01") is None
+
 
 # ---------------------------------------------------------------------------
 # _eval_formula — restricted arithmetic DSL, allowlisted AST walk
@@ -771,10 +798,7 @@ class TestEvalFormula:
 
     def test_string_concatenation(self):
         # Add with str promotes both sides via f-string.
-        assert (
-            _eval_formula("'host-' + ordinal", {"ordinal": 7})
-            == "host-7"
-        )
+        assert _eval_formula("'host-' + ordinal", {"ordinal": 7}) == "host-7"
 
     def test_parentheses(self):
         assert _eval_formula("(ordinal + 1) * 2", {"ordinal": 3}) == "8"
@@ -829,6 +853,14 @@ class TestEvalFormula:
         with pytest.raises(ValueError, match="requires int operand"):
             _eval_formula("-prefix", {"prefix": "x"})
 
+    def test_rejects_bool_constant(self):
+        # bool subclasses int, so True/False would pass an isinstance(int|str)
+        # check. Reject explicitly so booleans can't masquerade as 1/0.
+        with pytest.raises(ValueError, match="constants must be int or str"):
+            _eval_formula("True + ordinal", {"ordinal": 1})
+        with pytest.raises(ValueError, match="constants must be int or str"):
+            _eval_formula("False", {})
+
 
 # ---------------------------------------------------------------------------
 # _derive_region_id — second-octet convention from network.ip_range
@@ -864,3 +896,10 @@ class TestDeriveRegionId:
 
     def test_non_10_dot_falls_back(self):
         assert _derive_region_id({"network": {"ip_range": "192.168.0.0/16"}}) == 0
+
+    def test_below_100_second_octet_falls_back(self):
+        # Convention places per-region /16s at 10.(100+id).0.0/16; anything
+        # below 100 is non-conforming. Returning 0 (rather than a negative)
+        # avoids silently emitting wrong IPs from formulas that use region_id.
+        assert _derive_region_id({"network": {"ip_range": "10.99.0.0/16"}}) == 0
+        assert _derive_region_id({"network": {"ip_range": "10.0.0.0/16"}}) == 0

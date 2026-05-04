@@ -359,11 +359,14 @@ def _eval_formula(formula: str, variables: Mapping[str, int | str]) -> str:
                 f"private_ip_formula references unknown name "
                 f"{node.id!r}: {formula!r} (allowed: {sorted(variables)})"
             )
-        if isinstance(node, ast.Constant) and not isinstance(node.value, int | str):
-            raise ValueError(
-                f"private_ip_formula constants must be int or str, got "
-                f"{type(node.value).__name__}: {formula!r}"
-            )
+        if isinstance(node, ast.Constant):
+            # bool is a subclass of int, so it sneaks past int|str. Reject
+            # explicitly so True/False can't masquerade as 1/0 in formulas.
+            if isinstance(node.value, bool) or not isinstance(node.value, int | str):
+                raise ValueError(
+                    f"private_ip_formula constants must be int or str, got "
+                    f"{type(node.value).__name__}: {formula!r}"
+                )
 
     return str(_formula_walk(tree, variables))
 
@@ -409,8 +412,15 @@ def _resolve_cidr_ip(
             {"ordinal": ord_int, "region_id": region_id, "env_name": env_name},
         )
         # Validate the rendered expression as a real IP address before
-        # returning. ip_address raises ValueError on garbage.
-        ipaddress.ip_address(rendered)
+        # returning. ip_address raises ValueError on garbage. Also enforce
+        # that the result lies inside the declared private_ip_cidr — a
+        # formula typo that produces a syntactically valid IP outside the
+        # network would otherwise return silently.
+        rendered_ip = ipaddress.ip_address(rendered)
+        if rendered_ip not in network:
+            raise ValueError(
+                f"private_ip_formula produced {rendered} outside private_ip_cidr {cidr}"
+            )
         return rendered
 
     raise ValueError(
@@ -437,9 +447,15 @@ def _derive_region_id(marker: Mapping[str, Any]) -> int:
             octets = str(net.network_address).split(".")
             if len(octets) >= 2 and octets[0] == "10":
                 try:
-                    return int(octets[1]) - 100
+                    second = int(octets[1])
                 except ValueError:
                     return 0
+                # The convention places per-region /16s at 10.(100+id).0.0/16.
+                # Anything below 100 (or the impossible >255) is a non-
+                # conforming range — return 0 rather than emit a negative
+                # region_id that would silently corrupt formula output.
+                if 100 <= second <= 255:
+                    return second - 100
     return 0
 
 
@@ -460,6 +476,10 @@ def get_host_ip(marker: dict, role: str, ordinal: str = "01") -> str | None:
     a value must check and fail loud at their layer.
     """
     hosts = marker.get("hosts", {})
+    if not isinstance(hosts, dict):
+        # Malformed marker (hosts: as a list/scalar) — fail soft so callers
+        # see the same "no IP configured" signal as a missing host entry.
+        return None
     host = hosts.get(role, {})
     if not isinstance(host, dict):
         return None

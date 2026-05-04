@@ -157,6 +157,14 @@ def _derive_subnets(
                 marker_path,
                 f"hosts.{role}.{source} is not a valid IP: {raw_ip!r} ({exc})",
             )
+        if not isinstance(host_ip, ipaddress.IPv4Address):
+            # Hetzner private networks are IPv4-only; bailing here keeps the
+            # error path consistent (exit 65) instead of letting the master
+            # containment check below raise TypeError on a v4/v6 mismatch.
+            _fail(
+                marker_path,
+                f"hosts.{role}.{source} must be IPv4, got {raw_ip!r}",
+            )
         if host_ip not in master:
             _fail(
                 marker_path,
@@ -202,10 +210,21 @@ def _derive_subnets(
                     f"hosts.{role}.private_ip_cidr {raw_cidr} is not a subset of "
                     f"network.ip_range {master.with_prefixlen}",
                 )
-            slash24 = ipaddress.ip_network(f"{host_cidr.network_address}/24", strict=False)
-            cidr = slash24.with_prefixlen
-            if cidr not in seen_subnets:
-                seen_subnets[cidr] = SubnetSpec(ip_range=cidr, network_zone=network_zone)
+            # Cover three prefix-length cases:
+            #   /24 exactly  → register that /24
+            #   smaller than /24 (e.g. /28) → register the enclosing /24
+            #   larger than /24 (e.g. /23, /16) → register every contained
+            #     /24 so the full declared range reaches the reconciler
+            #     instead of silently truncating to the first /24.
+            if host_cidr.prefixlen >= 24:
+                enclosing = ipaddress.ip_network(f"{host_cidr.network_address}/24", strict=False)
+                slash24s: tuple[ipaddress.IPv4Network, ...] = (enclosing,)
+            else:
+                slash24s = tuple(host_cidr.subnets(new_prefix=24))
+            for slash24 in slash24s:
+                cidr = slash24.with_prefixlen
+                if cidr not in seen_subnets:
+                    seen_subnets[cidr] = SubnetSpec(ip_range=cidr, network_zone=network_zone)
 
         ordinals = host.get("ordinals")
         if isinstance(ordinals, dict):
