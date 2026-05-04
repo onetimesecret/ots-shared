@@ -8,11 +8,13 @@ from ots_shared.ssh.env import (
     MARKER_FILENAME,
     _derive_region_id,
     _eval_formula,
+    _find_confexts,
     _tag_to_version,
     create_marker,
     find_env_file,
     find_marker,
     generate_env_template,
+    generate_envrc_template,
     generate_marker,
     get_host_ip,
     load_env_file,
@@ -903,3 +905,182 @@ class TestDeriveRegionId:
         # avoids silently emitting wrong IPs from formulas that use region_id.
         assert _derive_region_id({"network": {"ip_range": "10.99.0.0/16"}}) == 0
         assert _derive_region_id({"network": {"ip_range": "10.0.0.0/16"}}) == 0
+
+
+# ---------------------------------------------------------------------------
+# _find_confexts — sibling directory walk-up
+# ---------------------------------------------------------------------------
+
+
+class TestFindConfexts:
+    """_find_confexts walks up from start to find a sibling confexts/ dir."""
+
+    def test_finds_sibling_confexts(self, tmp_path):
+        confexts = tmp_path / "confexts"
+        confexts.mkdir()
+        start = tmp_path / "a" / "b" / "c"
+        start.mkdir(parents=True)
+
+        result = _find_confexts(start)
+        assert result == confexts
+
+    def test_finds_confexts_in_same_dir(self, tmp_path):
+        confexts = tmp_path / "confexts"
+        confexts.mkdir()
+
+        result = _find_confexts(tmp_path)
+        assert result == confexts
+
+    def test_returns_none_when_not_found(self, tmp_path):
+        # tmp_path has no confexts/ above it (it's a random /tmp subdir)
+        start = tmp_path / "a" / "b"
+        start.mkdir(parents=True)
+
+        result = _find_confexts(start)
+        assert result is None
+
+    def test_returns_none_at_filesystem_root(self):
+        # Walk all the way to / — must not loop and must return None
+        # (assuming the real filesystem has no /confexts/).
+        from pathlib import Path
+
+        root = Path("/")
+        candidate = root / "confexts"
+        if not candidate.is_dir():
+            result = _find_confexts(root)
+            assert result is None
+
+
+# ---------------------------------------------------------------------------
+# generate_envrc_template — content and substitution
+# ---------------------------------------------------------------------------
+
+
+class TestGenerateEnvrcTemplate:
+    """generate_envrc_template produces correct exports and substitutions."""
+
+    # --- required exports present ---
+
+    def test_hcloud_token_present(self, tmp_path):
+        out = generate_envrc_template(cwd=tmp_path)
+        assert "export HCLOUD_TOKEN=" in out
+
+    def test_cloudflare_api_token_present(self, tmp_path):
+        out = generate_envrc_template(cwd=tmp_path)
+        assert "export CLOUDFLARE_API_TOKEN=" in out
+
+    def test_deploy_user_passwd_hash_present(self, tmp_path):
+        out = generate_envrc_template(cwd=tmp_path)
+        assert "export DEPLOY_USER_PASSWD_HASH=" in out
+
+    def test_deploy_ssh_pubkey_present(self, tmp_path):
+        out = generate_envrc_template(cwd=tmp_path)
+        assert "export DEPLOY_SSH_PUBKEY=" in out
+
+    def test_jurisdiction_present(self, tmp_path):
+        out = generate_envrc_template(cwd=tmp_path)
+        assert "export JURISDICTION=" in out
+
+    def test_env_name_present(self, tmp_path):
+        out = generate_envrc_template(cwd=tmp_path)
+        assert "export ENV_NAME=" in out
+
+    def test_provision_repo_present(self, tmp_path):
+        out = generate_envrc_template(cwd=tmp_path)
+        assert "export PROVISION_REPO=" in out
+
+    def test_ssh_config_present(self, tmp_path):
+        out = generate_envrc_template(cwd=tmp_path)
+        assert "export SSH_CONFIG=" in out
+
+    # --- removed exports absent ---
+
+    def test_rabbitmq_pass_absent(self, tmp_path):
+        out = generate_envrc_template(cwd=tmp_path)
+        assert "RABBITMQ_PASS" not in out
+
+    def test_ots_user_passwd_hash_absent(self, tmp_path):
+        out = generate_envrc_template(cwd=tmp_path)
+        assert "OTS_USER_PASSWD_HASH" not in out
+
+    def test_ots_ssh_pubkey_absent(self, tmp_path):
+        out = generate_envrc_template(cwd=tmp_path)
+        assert "OTS_SSH_PUBKEY" not in out
+
+    # --- ENV_NAME derived from cwd basename ---
+
+    def test_env_name_derived_from_cwd_basename(self, tmp_path):
+        cwd = tmp_path / "eu-demo"
+        cwd.mkdir()
+        out = generate_envrc_template(cwd=cwd)
+        assert 'export ENV_NAME="eu-demo"' in out
+
+    def test_env_name_different_basename(self, tmp_path):
+        cwd = tmp_path / "prod-ca"
+        cwd.mkdir()
+        out = generate_envrc_template(cwd=cwd)
+        assert 'export ENV_NAME="prod-ca"' in out
+
+    # --- PROVISION_REPO with monorepo_root override ---
+
+    def test_provision_repo_uses_monorepo_root_override(self, tmp_path):
+        confexts = tmp_path / "confexts"
+        confexts.mkdir()
+        cwd = tmp_path / "some-env"
+        cwd.mkdir()
+
+        out = generate_envrc_template(cwd=cwd, monorepo_root=tmp_path)
+        assert f'export PROVISION_REPO="{tmp_path}/confexts"' in out
+
+    # --- PROVISION_REPO when confexts not found ---
+
+    def test_provision_repo_placeholder_when_confexts_missing(self, tmp_path):
+        # monorepo_root given but no confexts/ inside it; the path is
+        # constructed unconditionally as monorepo_root / "confexts".
+        cwd = tmp_path / "some-env"
+        cwd.mkdir()
+        isolated = tmp_path / "no-confexts-here"
+        isolated.mkdir()
+
+        out = generate_envrc_template(cwd=cwd, monorepo_root=isolated)
+        # When monorepo_root is passed, confexts path is always
+        # str(monorepo_root / "confexts") regardless of existence.
+        assert f'export PROVISION_REPO="{isolated}/confexts"' in out
+
+    # --- hint comments ---
+
+    def test_mkpasswd_hint_comment_present(self, tmp_path):
+        out = generate_envrc_template(cwd=tmp_path)
+        assert "mkpasswd" in out
+
+    def test_ssh_keygen_hint_comment_present(self, tmp_path):
+        out = generate_envrc_template(cwd=tmp_path)
+        assert "ssh-keygen" in out
+
+    # --- hint comments near their variables ---
+
+    def test_mkpasswd_hint_precedes_deploy_user_passwd_hash(self, tmp_path):
+        out = generate_envrc_template(cwd=tmp_path)
+        mkpasswd_pos = out.index("mkpasswd")
+        passwd_hash_pos = out.index("export DEPLOY_USER_PASSWD_HASH=")
+        assert mkpasswd_pos < passwd_hash_pos
+
+    def test_ssh_keygen_hint_precedes_deploy_ssh_pubkey(self, tmp_path):
+        out = generate_envrc_template(cwd=tmp_path)
+        ssh_keygen_pos = out.index("ssh-keygen")
+        pubkey_pos = out.index("export DEPLOY_SSH_PUBKEY=")
+        assert ssh_keygen_pos < pubkey_pos
+
+    # --- source_up header ---
+
+    def test_source_up_present_once(self, tmp_path):
+        out = generate_envrc_template(cwd=tmp_path)
+        source_up_lines = [line for line in out.splitlines() if line.strip() == "source_up"]
+        assert len(source_up_lines) == 1
+
+    def test_source_up_before_first_export(self, tmp_path):
+        out = generate_envrc_template(cwd=tmp_path)
+        lines = out.splitlines()
+        source_up_idx = next(i for i, line in enumerate(lines) if "source_up" in line)
+        first_export_idx = next(i for i, line in enumerate(lines) if line.startswith("export "))
+        assert source_up_idx < first_export_idx

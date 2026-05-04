@@ -647,28 +647,69 @@ def create_gitignore(directory: Path, *, force: bool = False) -> Path:
     return path
 
 
-def generate_envrc_template() -> str:
+def _find_confexts(start: Path) -> Path | None:
+    """Walk up from *start* looking for a sibling ``confexts/`` directory."""
+    for parent in [start, *start.parents]:
+        candidate = parent / "confexts"
+        if candidate.is_dir():
+            return candidate
+    return None
+
+
+def generate_envrc_template(
+    cwd: Path | None = None,
+    monorepo_root: Path | None = None,
+) -> str:
     """Generate a template ``.envrc`` for a new OTS environment.
+
+    Args:
+        cwd: Directory where ``lots init`` is being run. Defaults to
+            ``Path.cwd()``. Used to derive ``ENV_NAME``.
+        monorepo_root: Base directory containing ``confexts/``. When
+            ``None``, resolved by walking up from this file's location,
+            then from *cwd*. Falls back to a placeholder string if not found.
 
     Values are empty — the operator fills them in after generating
     credentials. Host IPs live in ``otsinfra.yaml``, not here.
     """
+    resolved_cwd = cwd if cwd is not None else Path.cwd()
+    env_name = resolved_cwd.name or "default"
+
+    # Resolve confexts path: prefer monorepo_root arg, then walk from cwd,
+    # then fall back to a placeholder.
+    confexts_path: str
+    if monorepo_root is not None:
+        confexts_path = str(monorepo_root / "confexts")
+    else:
+        found = _find_confexts(resolved_cwd.resolve())
+        confexts_path = str(found) if found else "<path-to-monorepo>/confexts"
+
     lines = [
-        "# .envrc — otsinfra environment",
-        f"# Created: {date.today().isoformat()}",
         "source_up",
         "",
-        'export OTS_USER_PASSWD_HASH=""',
-        'export OTS_SSH_PUBKEY=""',
+        "# .envrc — otsinfra environment",
+        f"# Created: {date.today().isoformat()}",
+        "",
         'export HCLOUD_TOKEN="<paste-token-here>"',
-        'export RABBITMQ_PASS=""',
+        'export CLOUDFLARE_API_TOKEN="<paste-token-here>"',
+        "",
+        "# Generate with: mkpasswd -m sha-512",
+        'export DEPLOY_USER_PASSWD_HASH=""',
+        "",
+        "# Paste output of: ssh-keygen -y -f ~/.ssh/<key>",
+        'export DEPLOY_SSH_PUBKEY=""',
+        "",
+        'export JURISDICTION=""',
+        f'export ENV_NAME="{env_name}"',
+        "",
+        "# Per-role tree consumed by lots confext push and lots provision push.",
+        "# Point at the monorepo confexts/ directory or a standalone checkout.",
+        f'export PROVISION_REPO="{confexts_path}"',
+        "",
+        "# Typical: ${PWD}/ssh_config or ~/.ssh/config.d/<env>",
+        'export SSH_CONFIG=""',
         "",
         "# Host IPs defined in otsinfra.yaml",
-        "",
-        "# Inherited from ancestor .envrc — uncomment to override",
-        "# JURISDICTION=EU",
-        "# VALKEY_PORT=5212",
-        "# ENVIRONMENT=non-prod",
         "",
     ]
     return "\n".join(lines)
@@ -683,7 +724,7 @@ def create_envrc_template(directory: Path, *, force: bool = False) -> Path:
     path = directory / ENVRC_FILENAME
     if path.exists() and not force:
         raise FileExistsError(f"{path} already exists (use --force to overwrite)")
-    path.write_text(generate_envrc_template())
+    path.write_text(generate_envrc_template(cwd=directory))
     return path
 
 
