@@ -460,6 +460,72 @@ def _derive_region_id(marker: Mapping[str, Any]) -> int:
     return 0
 
 
+@dataclass(frozen=True, slots=True)
+class HostPublicNet:
+    """Per-host public network configuration from ``otsinfra.yaml``.
+
+    Controls whether Hetzner assigns public IPv4/IPv6 addresses at server
+    creation time. Both default to ``True`` (public IPs enabled) when not
+    specified in the marker — matching Hetzner's default behavior and the
+    ``lots hcloud server create`` CLI defaults.
+
+    Typical use: db hosts set ``public_ipv4: false`` / ``public_ipv6: false``
+    so they're reachable only via the private network (through jumphost).
+    """
+
+    ipv4: bool = True
+    ipv6: bool = True
+
+
+def get_host_public_net(marker: dict, role: str, ordinal: str = "01") -> HostPublicNet:
+    """Resolve public network config for *role* from loaded marker data.
+
+    Resolution order (first defined wins, per field):
+
+    1. ``hosts.<role>.ordinals.<ordinal>.public_ipv4`` / ``public_ipv6``
+    2. ``hosts.<role>.public_ipv4`` / ``public_ipv6``
+    3. Defaults: ``True`` for both (public IPs enabled)
+
+    Returns a ``HostPublicNet`` dataclass. Fields not specified in the
+    marker fall back to ``True`` — matching Hetzner's default and the
+    ``lots hcloud server create`` CLI.
+    """
+    hosts = marker.get("hosts", {})
+    if not isinstance(hosts, dict):
+        return HostPublicNet()
+    host = hosts.get(role, {})
+    if not isinstance(host, dict):
+        return HostPublicNet()
+
+    def _resolve_bool(key: str) -> bool:
+        # Check ordinal-level override first
+        ordinals = host.get("ordinals")
+        if isinstance(ordinals, dict):
+            per_ord = ordinals.get(ordinal)
+            if isinstance(per_ord, dict) and key in per_ord:
+                val = per_ord[key]
+                if isinstance(val, bool):
+                    return val
+                if isinstance(val, str):
+                    return val.lower() not in ("false", "no", "0", "")
+
+        # Fall back to role-level setting
+        if key in host:
+            val = host[key]
+            if isinstance(val, bool):
+                return val
+            if isinstance(val, str):
+                return val.lower() not in ("false", "no", "0", "")
+
+        # Default: enabled
+        return True
+
+    return HostPublicNet(
+        ipv4=_resolve_bool("public_ipv4"),
+        ipv6=_resolve_bool("public_ipv6"),
+    )
+
+
 def get_host_ip(marker: dict, role: str, ordinal: str = "01") -> str | None:
     """Resolve the per-ordinal private IP for *role* from loaded marker data.
 
@@ -705,6 +771,7 @@ def generate_envrc_template(
         'export DEPLOY_USER="debian"',
         'export SSH_PORT="22"',
         'export JURISDICTION=""',
+        'export SITE_SLUG="onetimesecret"',
         f'export ENV_NAME="{env_name}"',
         "",
         "# Per-role tree consumed by lots confext push and lots provision push.",
