@@ -771,6 +771,7 @@ def generate_envrc_template(
         'export DEPLOY_USER="debian"',
         'export SSH_PORT="22"',
         'export JURISDICTION=""',
+        'export SITE_SLUG="onetimesecret"',
         f'export ENV_NAME="{env_name}"',
         "",
         "# Per-role tree consumed by lots confext push and lots provision push.",
