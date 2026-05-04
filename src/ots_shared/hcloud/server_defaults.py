@@ -46,6 +46,11 @@ USER_DATA_LIMIT_BYTES = 32 * 1024
 # ignored — these are foreign-tool sections (rots' `unce:`/`caddy:` file
 # provisioning, etc.) and not ours to validate. Type mismatches on known
 # keys always raise.
+#
+# Recognized nested forms (silently passed through, not allowlist-validated):
+#   ordinals:        per-replica overrides keyed by ordinal string ("02", "03")
+#   <username>:      per-user file specs (web's caddy etc.)
+#   unce:, caddy:    rots-side foreign-tool sections
 
 MarkerValue = str | list[str] | bool | int
 MarkerKind = type[str] | type[list] | type[bool] | type[int]
@@ -75,6 +80,15 @@ MARKER_HOST_FIELDS: tuple[MarkerField, ...] = (
     MarkerField("image", str, "--image"),
     MarkerField("location", str, "--location"),
     MarkerField("private_ip_address", str, "--ip"),
+    MarkerField("private_ip_cidr", str, "--ip-cidr"),
+    MarkerField("private_ip_assignment_type", str, "--ip-assignment"),
+    MarkerField("private_ip_formula", str, "--ip-formula"),
+    # Schema-only profile selector. Names a cloud-init generator under
+    # ``lots.cloudinit.generators.PROFILE_REGISTRY``; non-canonical roles
+    # (anything outside db/web/jumphost) opt into rendering via this key.
+    # No CLI flag wiring — the value is consumed by ``lots cloudinit
+    # generate-env``, not by ``server create``.
+    MarkerField("profile", str, "--profile"),
     # Representative non-str examples proving the coercion story. Wiring
     # these into `create()` (if desired) is a separate pass.
     MarkerField("firewalls", list, "--firewall"),

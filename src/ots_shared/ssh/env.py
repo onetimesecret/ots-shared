@@ -17,6 +17,8 @@ Two file types mark an OTS environment directory:
 
 from __future__ import annotations
 
+import ast
+import ipaddress
 import logging
 import os
 import re
@@ -247,11 +249,266 @@ DEFAULT_HOSTS: dict[str, dict[str, str]] = {
 }
 
 
-def get_host_ip(marker: dict, role: str) -> str | None:
-    """Extract ``private_ip_address`` for *role* from loaded marker data."""
+# Allowlisted AST node types for ``private_ip_formula`` evaluation. Anything
+# not in this set (function calls, attribute access, subscripts, lambdas,
+# comprehensions, etc.) is rejected before evaluation.
+_FORMULA_ALLOWED_NODES: frozenset[type[ast.AST]] = frozenset(
+    {
+        ast.Expression,
+        ast.BinOp,
+        ast.UnaryOp,
+        ast.Constant,
+        ast.Name,
+        ast.Load,
+        ast.Add,
+        ast.Sub,
+        ast.Mult,
+        ast.Div,
+        ast.Mod,
+        ast.FloorDiv,
+        ast.LShift,
+        ast.RShift,
+        ast.USub,
+        ast.UAdd,
+    }
+)
+
+
+def _formula_walk(node: ast.AST, variables: Mapping[str, int | str]) -> int | str:
+    """Recursive evaluator for the validated AST.
+
+    Implements the operators in :data:`_FORMULA_ALLOWED_NODES`. Calls into
+    Python operators directly rather than going through ``eval``/
+    ``compile`` so the evaluator has no path to runtime code execution.
+    """
+    if isinstance(node, ast.Expression):
+        return _formula_walk(node.body, variables)
+    if isinstance(node, ast.Constant):
+        # Already type-checked in _eval_formula's pre-walk pass.
+        return node.value  # type: ignore[no-any-return]
+    if isinstance(node, ast.Name):
+        return variables[node.id]
+    if isinstance(node, ast.UnaryOp):
+        operand = _formula_walk(node.operand, variables)
+        if not isinstance(operand, int):
+            raise ValueError(f"unary operator requires int operand, got {type(operand).__name__}")
+        if isinstance(node.op, ast.USub):
+            return -operand
+        if isinstance(node.op, ast.UAdd):
+            return +operand
+        raise ValueError(f"unsupported unary op: {type(node.op).__name__}")
+    if isinstance(node, ast.BinOp):
+        left = _formula_walk(node.left, variables)
+        right = _formula_walk(node.right, variables)
+        op = node.op
+        # String concatenation with + is the only mixed-type operation
+        # we permit; everything else requires both sides be int.
+        if isinstance(op, ast.Add):
+            if isinstance(left, str) or isinstance(right, str):
+                return f"{left}{right}"
+            return left + right
+        if not (isinstance(left, int) and isinstance(right, int)):
+            raise ValueError(
+                f"{type(op).__name__} requires int operands, got "
+                f"{type(left).__name__} and {type(right).__name__}"
+            )
+        if isinstance(op, ast.Sub):
+            return left - right
+        if isinstance(op, ast.Mult):
+            return left * right
+        if isinstance(op, ast.Div):
+            return left // right  # integer division for IP arithmetic
+        if isinstance(op, ast.FloorDiv):
+            return left // right
+        if isinstance(op, ast.Mod):
+            return left % right
+        if isinstance(op, ast.LShift):
+            return left << right
+        if isinstance(op, ast.RShift):
+            return left >> right
+        raise ValueError(f"unsupported binary op: {type(op).__name__}")
+    raise ValueError(f"unreachable: unallowlisted node {type(node).__name__}")
+
+
+def _eval_formula(formula: str, variables: Mapping[str, int | str]) -> str:
+    """Evaluate a restricted arithmetic expression for CIDR-IP derivation.
+
+    Supports the operators ``+ - * / // % << >>`` plus parenthesised
+    sub-expressions, integer/string constants, and the names supplied in
+    *variables* (typically ``ordinal``, ``region_id``, ``env_name``).
+
+    Rejects function calls, attribute access, subscripts, lambdas,
+    comprehensions, and any other node type with :class:`ValueError`
+    naming the offending node — fail loud so a typo in the operator's
+    formula surfaces immediately rather than silently evaluating to a
+    wrong (but valid) IP. Implementation walks the validated AST
+    directly; no use of ``eval``/``compile``.
+    """
+    try:
+        tree = ast.parse(formula, mode="eval")
+    except SyntaxError as exc:
+        raise ValueError(f"private_ip_formula syntax error: {formula!r} ({exc})") from exc
+
+    for node in ast.walk(tree):
+        if type(node) not in _FORMULA_ALLOWED_NODES:
+            raise ValueError(
+                f"private_ip_formula contains forbidden node {type(node).__name__!s}: {formula!r}"
+            )
+        if isinstance(node, ast.Name) and node.id not in variables:
+            raise ValueError(
+                f"private_ip_formula references unknown name "
+                f"{node.id!r}: {formula!r} (allowed: {sorted(variables)})"
+            )
+        if isinstance(node, ast.Constant):
+            # bool is a subclass of int, so it sneaks past int|str. Reject
+            # explicitly so True/False can't masquerade as 1/0 in formulas.
+            if isinstance(node.value, bool) or not isinstance(node.value, int | str):
+                raise ValueError(
+                    f"private_ip_formula constants must be int or str, got "
+                    f"{type(node.value).__name__}: {formula!r}"
+                )
+
+    return str(_formula_walk(tree, variables))
+
+
+def _resolve_cidr_ip(
+    cidr: str,
+    ordinal: str,
+    assignment: str | None,
+    formula: str | None,
+    marker: Mapping[str, Any],
+) -> str:
+    """Compute the per-ordinal IP from a host's ``private_ip_cidr``.
+
+    ``in_order`` (default): network address + 10 + int(ordinal). Reserves
+    .0–.9 for gateway and infrastructure.
+
+    ``calculated``: requires ``private_ip_formula``. Variables exposed:
+    ``ordinal: int``, ``env_name: str``, ``region_id: int`` (derived from
+    the marker's ``network.ip_range`` per the per-region /16 convention).
+    """
+    network = ipaddress.ip_network(cidr, strict=True)
+    try:
+        ord_int = int(ordinal)
+    except ValueError as exc:
+        raise ValueError(f"ordinal must be a digit string, got {ordinal!r}") from exc
+
+    strategy = (assignment or "in_order").strip().lower()
+    if strategy == "in_order":
+        host_index = 10 + ord_int
+        addr = network.network_address + host_index
+        if addr not in network:
+            raise ValueError(f"in_order ordinal {ordinal!r} overflows {cidr} (would assign {addr})")
+        return str(addr)
+
+    if strategy == "calculated":
+        if not formula:
+            raise ValueError("private_ip_assignment_type='calculated' requires private_ip_formula")
+        env_name_raw = marker.get("env_name") if isinstance(marker, Mapping) else None
+        env_name = env_name_raw if isinstance(env_name_raw, str) else ""
+        region_id = _derive_region_id(marker)
+        rendered = _eval_formula(
+            formula,
+            {"ordinal": ord_int, "region_id": region_id, "env_name": env_name},
+        )
+        # Validate the rendered expression as a real IP address before
+        # returning. ip_address raises ValueError on garbage. Also enforce
+        # that the result lies inside the declared private_ip_cidr — a
+        # formula typo that produces a syntactically valid IP outside the
+        # network would otherwise return silently.
+        rendered_ip = ipaddress.ip_address(rendered)
+        if rendered_ip not in network:
+            raise ValueError(
+                f"private_ip_formula produced {rendered} outside private_ip_cidr {cidr}"
+            )
+        return rendered
+
+    raise ValueError(
+        f"private_ip_assignment_type must be 'in_order' or 'calculated', got {assignment!r}"
+    )
+
+
+def _derive_region_id(marker: Mapping[str, Any]) -> int:
+    """Return ``region_id`` derived from ``network.ip_range``.
+
+    Convention (see examples/environment/.otsinfra.yaml): per-region master
+    /16 sits at ``10.(100 + region_id).0.0/16``. Pull the second octet and
+    subtract 100 when ``network.ip_range`` follows the pattern. Returns 0
+    when no convention-matching network block is present (eu-1 grandfather).
+    """
+    network = marker.get("network") if isinstance(marker, Mapping) else None
+    if isinstance(network, Mapping):
+        raw = network.get("ip_range")
+        if isinstance(raw, str):
+            try:
+                net = ipaddress.ip_network(raw, strict=False)
+            except ValueError:
+                return 0
+            octets = str(net.network_address).split(".")
+            if len(octets) >= 2 and octets[0] == "10":
+                try:
+                    second = int(octets[1])
+                except ValueError:
+                    return 0
+                # The convention places per-region /16s at 10.(100+id).0.0/16.
+                # Anything below 100 (or the impossible >255) is a non-
+                # conforming range — return 0 rather than emit a negative
+                # region_id that would silently corrupt formula output.
+                if 100 <= second <= 255:
+                    return second - 100
+    return 0
+
+
+def get_host_ip(marker: dict, role: str, ordinal: str = "01") -> str | None:
+    """Resolve the per-ordinal private IP for *role* from loaded marker data.
+
+    Resolution order (first non-empty wins):
+
+    1. ``hosts.<role>.ordinals.<ordinal>.private_ip_address`` — explicit
+       per-replica override.
+    2. ``hosts.<role>.private_ip_address`` (legacy scalar) — only when
+       ordinal is ``"01"`` so a marker carrying a single scalar continues
+       to work for the canonical first instance and returns ``None`` for
+       higher ordinals instead of silently aliasing.
+    3. ``hosts.<role>.private_ip_cidr`` + assignment strategy — computed.
+
+    Returns ``None`` when no source is configured. Callers that require
+    a value must check and fail loud at their layer.
+    """
     hosts = marker.get("hosts", {})
+    if not isinstance(hosts, dict):
+        # Malformed marker (hosts: as a list/scalar) — fail soft so callers
+        # see the same "no IP configured" signal as a missing host entry.
+        return None
     host = hosts.get(role, {})
-    return host.get("private_ip_address")
+    if not isinstance(host, dict):
+        return None
+
+    ordinals = host.get("ordinals")
+    if isinstance(ordinals, dict):
+        per_ord = ordinals.get(ordinal)
+        if isinstance(per_ord, dict):
+            override = per_ord.get("private_ip_address")
+            if isinstance(override, str) and override:
+                return override
+
+    legacy = host.get("private_ip_address")
+    if isinstance(legacy, str) and legacy and ordinal == "01":
+        return legacy
+
+    cidr = host.get("private_ip_cidr")
+    if isinstance(cidr, str) and cidr:
+        assignment = host.get("private_ip_assignment_type")
+        formula = host.get("private_ip_formula")
+        return _resolve_cidr_ip(
+            cidr,
+            ordinal,
+            assignment if isinstance(assignment, str) else None,
+            formula if isinstance(formula, str) else None,
+            marker,
+        )
+
+    return None
 
 
 def resolve_env_name(marker: Mapping[str, Any] | None) -> str:

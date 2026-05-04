@@ -124,25 +124,30 @@ def _derive_subnets(
     master: ipaddress.IPv4Network,
     network_zone: str,
 ) -> tuple[SubnetSpec, ...]:
-    """Walk ``hosts.*.private_ip_address`` and build the deduplicated subnet set.
+    """Build the deduplicated subnet set from per-host IP declarations.
 
-    Each host IP is rounded down to its enclosing ``/24``. Hosts without
-    ``private_ip_address`` are skipped. Hosts whose IP is outside the
-    master fail loud (exit 65).
+    Three sources contribute, all reduced to enclosing /24s:
+
+    * ``hosts.<role>.private_ip_address`` (legacy scalar) — single IP.
+    * ``hosts.<role>.private_ip_cidr`` — declared subnet; the CIDR
+      itself is registered (typically already a /24, otherwise its
+      enclosing /24). Validated against *master* as a subset, not just
+      a network-address membership check.
+    * ``hosts.<role>.ordinals.<NN>.private_ip_address`` — per-replica
+      override IPs whose /24s may differ from siblings.
+
+    Hosts with none of these are skipped. Anything outside *master*
+    fails loud (exit 65).
     """
     seen_subnets: dict[str, SubnetSpec] = {}
-    for role, host in hosts.items():
-        if not isinstance(host, dict):
-            # Foreign-tool sections (rots, caddy) come through here too;
-            # skip without complaint.
-            continue
-        raw_ip = host.get("private_ip_address")
+
+    def register_ip(role: str, raw_ip: object, source: str) -> None:
         if raw_ip is None:
-            continue
+            return
         if not isinstance(raw_ip, str) or not raw_ip:
             _fail(
                 marker_path,
-                f"hosts.{role}.private_ip_address must be a non-empty str, "
+                f"hosts.{role}.{source} must be a non-empty str, "
                 f"got {type(raw_ip).__name__}: {raw_ip!r}",
             )
         try:
@@ -150,20 +155,87 @@ def _derive_subnets(
         except (ValueError, TypeError) as exc:
             _fail(
                 marker_path,
-                f"hosts.{role}.private_ip_address is not a valid IP: {raw_ip!r} ({exc})",
+                f"hosts.{role}.{source} is not a valid IP: {raw_ip!r} ({exc})",
+            )
+        if not isinstance(host_ip, ipaddress.IPv4Address):
+            # Hetzner private networks are IPv4-only; bailing here keeps the
+            # error path consistent (exit 65) instead of letting the master
+            # containment check below raise TypeError on a v4/v6 mismatch.
+            _fail(
+                marker_path,
+                f"hosts.{role}.{source} must be IPv4, got {raw_ip!r}",
             )
         if host_ip not in master:
             _fail(
                 marker_path,
-                f"hosts.{role}.private_ip_address {raw_ip} is outside "
+                f"hosts.{role}.{source} {raw_ip} is outside "
                 f"network.ip_range {master.with_prefixlen}",
             )
-        # Compute the enclosing /24. _parse_master_cidr already forbids
-        # masters smaller than /16, so the /24 is guaranteed to fit.
         slash24 = ipaddress.ip_network(f"{raw_ip}/24", strict=False)
         cidr = slash24.with_prefixlen
         if cidr not in seen_subnets:
             seen_subnets[cidr] = SubnetSpec(ip_range=cidr, network_zone=network_zone)
+
+    for role, host in hosts.items():
+        if not isinstance(host, dict):
+            # Foreign-tool sections (rots, caddy) come through here too;
+            # skip without complaint.
+            continue
+
+        register_ip(role, host.get("private_ip_address"), "private_ip_address")
+
+        raw_cidr = host.get("private_ip_cidr")
+        if raw_cidr is not None:
+            if not isinstance(raw_cidr, str) or not raw_cidr:
+                _fail(
+                    marker_path,
+                    f"hosts.{role}.private_ip_cidr must be a non-empty str, "
+                    f"got {type(raw_cidr).__name__}: {raw_cidr!r}",
+                )
+            try:
+                host_cidr = ipaddress.ip_network(raw_cidr, strict=True)
+            except (ValueError, TypeError) as exc:
+                _fail(
+                    marker_path,
+                    f"hosts.{role}.private_ip_cidr is not a valid CIDR: {raw_cidr!r} ({exc})",
+                )
+            if not isinstance(host_cidr, ipaddress.IPv4Network):
+                _fail(
+                    marker_path,
+                    f"hosts.{role}.private_ip_cidr must be IPv4, got {raw_cidr!r}",
+                )
+            if not host_cidr.subnet_of(master):
+                _fail(
+                    marker_path,
+                    f"hosts.{role}.private_ip_cidr {raw_cidr} is not a subset of "
+                    f"network.ip_range {master.with_prefixlen}",
+                )
+            # Cover three prefix-length cases:
+            #   /24 exactly  → register that /24
+            #   smaller than /24 (e.g. /28) → register the enclosing /24
+            #   larger than /24 (e.g. /23, /16) → register every contained
+            #     /24 so the full declared range reaches the reconciler
+            #     instead of silently truncating to the first /24.
+            if host_cidr.prefixlen >= 24:
+                enclosing = ipaddress.ip_network(f"{host_cidr.network_address}/24", strict=False)
+                slash24s: tuple[ipaddress.IPv4Network, ...] = (enclosing,)
+            else:
+                slash24s = tuple(host_cidr.subnets(new_prefix=24))
+            for slash24 in slash24s:
+                cidr = slash24.with_prefixlen
+                if cidr not in seen_subnets:
+                    seen_subnets[cidr] = SubnetSpec(ip_range=cidr, network_zone=network_zone)
+
+        ordinals = host.get("ordinals")
+        if isinstance(ordinals, dict):
+            for ord_key, per_ord in ordinals.items():
+                if not isinstance(per_ord, dict):
+                    continue
+                register_ip(
+                    role,
+                    per_ord.get("private_ip_address"),
+                    f"ordinals.{ord_key}.private_ip_address",
+                )
 
     # Sort by integer network address for stable, human-readable order.
     sorted_subnets = sorted(
