@@ -120,10 +120,11 @@ def test_partial_host_heals_when_only_tls_missing(tmp_path: Path) -> None:
     assert (web_dir / "cert.pem").is_file()
 
     # Spec §113: TLS *and* WG both bump the per-CA monotonic counter (WG
-    # inherits the value for timeline accounting). On this run, three
-    # increments happen: web tls, db wg, db tls. SSH does not pass ca=, so
-    # no bump for either ssh entry. Counter sits at 3 after the run, so
-    # the next allocation returns 4.
-    assert next_serial(ca) == 4, (
-        "expected three serial bumps (web tls + db wg + db tls); serial counter disagrees"
+    # inherits the value for timeline accounting). On this run, four
+    # increments happen: web tls, db wg, db tls, deploy wg. SSH does not
+    # pass ca=, so no bump for any ssh entry. Counter sits at 4 after the
+    # run, so the next allocation returns 5.
+    assert next_serial(ca) == 5, (
+        "expected four serial bumps (web tls + db wg + db tls + deploy wg); "
+        "serial counter disagrees"
     )

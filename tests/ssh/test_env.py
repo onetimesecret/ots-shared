@@ -1053,23 +1053,22 @@ class TestGenerateEnvrcTemplate:
         out = generate_envrc_template(cwd=tmp_path)
         assert "mkpasswd" in out
 
-    def test_ssh_keygen_hint_comment_present(self, tmp_path):
-        out = generate_envrc_template(cwd=tmp_path)
-        assert "ssh-keygen" in out
-
-    # --- hint comments near their variables ---
-
     def test_mkpasswd_hint_precedes_deploy_user_passwd_hash(self, tmp_path):
         out = generate_envrc_template(cwd=tmp_path)
         mkpasswd_pos = out.index("mkpasswd")
         passwd_hash_pos = out.index("export DEPLOY_USER_PASSWD_HASH=")
         assert mkpasswd_pos < passwd_hash_pos
 
-    def test_ssh_keygen_hint_precedes_deploy_ssh_pubkey(self, tmp_path):
+    # --- deploy keypair references .trust/deploy/ ---
+
+    def test_deploy_ssh_pubkey_reads_from_trust(self, tmp_path):
         out = generate_envrc_template(cwd=tmp_path)
-        ssh_keygen_pos = out.index("ssh-keygen")
-        pubkey_pos = out.index("export DEPLOY_SSH_PUBKEY=")
-        assert ssh_keygen_pos < pubkey_pos
+        assert ".trust/deploy/ssh.pub)" in out
+        assert "$(cat " in out
+
+    def test_deploy_ssh_keyfile_points_to_trust(self, tmp_path):
+        out = generate_envrc_template(cwd=tmp_path)
+        assert f'export DEPLOY_SSH_KEYFILE="{tmp_path}/.trust/deploy/ssh"' in out
 
     # --- source_up header ---
 
