@@ -32,11 +32,13 @@ jobs:
       - name: Build package
         run: uv build
 
-      - name: Create GitHub Release
+      - name: Create GitHub Release if missing
         env:
           GH_TOKEN: ${{ github.token }}
           TAG_NAME: ${{ github.ref_name }}
-        run: gh release create "$TAG_NAME" dist/* --generate-notes
+        run: |
+          gh release view "$TAG_NAME" >/dev/null 2>&1 || \
+            gh release create "$TAG_NAME" dist/* --generate-notes
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
