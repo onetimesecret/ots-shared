@@ -1,6 +1,6 @@
 [project]
 name = "ots-shared"
-version = "0.4.1"
+version = "0.4.2"
 description = "Shared constants and utilities for OTS operations tools"
 readme = "README.md"
 requires-python = ">=3.11"
