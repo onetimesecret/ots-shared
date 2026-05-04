@@ -6,16 +6,19 @@ import pytest
 
 from ots_shared.ssh.env import (
     MARKER_FILENAME,
+    SSH_KNOWN_HOSTS_FILENAME,
     _derive_region_id,
     _eval_formula,
     _find_confexts,
     _tag_to_version,
     create_marker,
+    create_ssh_config,
     find_env_file,
     find_marker,
     generate_env_template,
     generate_envrc_template,
     generate_marker,
+    generate_ssh_config,
     get_host_ip,
     load_env_file,
     load_marker,
@@ -1083,3 +1086,153 @@ class TestGenerateEnvrcTemplate:
         source_up_idx = next(i for i, line in enumerate(lines) if "source_up" in line)
         first_export_idx = next(i for i, line in enumerate(lines) if line.startswith("export "))
         assert source_up_idx < first_export_idx
+
+
+# ---------------------------------------------------------------------------
+# generate_ssh_config — content generation
+# ---------------------------------------------------------------------------
+
+
+class TestGenerateSshConfig:
+    """Tests for SSH config content generation."""
+
+    def test_no_proxyjump_without_jumphost(self):
+        """ProxyJump is only added when jumphost exists in marker."""
+        marker = {
+            "hosts": {
+                "web": {"private_ip_address": "10.0.0.12"},
+                "db": {"private_ip_address": "10.0.0.13"},
+            }
+        }
+        content = generate_ssh_config(marker, "eu", "/path/to/key")
+        assert "ProxyJump" not in content
+
+    def test_proxyjump_added_when_jumphost_exists(self):
+        """ProxyJump is added for non-jumphost hosts when jumphost exists."""
+        marker = {
+            "hosts": {
+                "jumphost": {"private_ip_address": "10.0.0.10"},
+                "web": {"private_ip_address": "10.0.0.12"},
+            }
+        }
+        content = generate_ssh_config(marker, "eu", "/path/to/key")
+        assert "ProxyJump               eu-jumphost-01" in content
+        # Jumphost itself should NOT have ProxyJump
+        jumphost_block = content.split("Host eu-jumphost-01")[1].split("Host ")[0]
+        assert "ProxyJump" not in jumphost_block
+
+    def test_host_order_is_deterministic(self):
+        """SSH config host order is sorted, not dependent on dict iteration order."""
+        marker = {
+            "hosts": {
+                "zebra": {"private_ip_address": "10.0.0.26"},
+                "alpha": {"private_ip_address": "10.0.0.1"},
+                "middle": {"private_ip_address": "10.0.0.13"},
+            }
+        }
+        content = generate_ssh_config(marker, "eu", "/path/to/key")
+
+        # Extract host block positions
+        alpha_pos = content.index("Host eu-alpha-01")
+        middle_pos = content.index("Host eu-middle-01")
+        zebra_pos = content.index("Host eu-zebra-01")
+
+        # Should be alphabetically sorted
+        assert alpha_pos < middle_pos < zebra_pos
+
+    def test_host_order_deterministic_with_jumphost(self):
+        """Jumphost comes first, then remaining hosts sorted."""
+        marker = {
+            "hosts": {
+                "zebra": {"private_ip_address": "10.0.0.26"},
+                "jumphost": {"private_ip_address": "10.0.0.10"},
+                "alpha": {"private_ip_address": "10.0.0.1"},
+            }
+        }
+        content = generate_ssh_config(marker, "eu", "/path/to/key")
+
+        jumphost_pos = content.index("Host eu-jumphost-01")
+        alpha_pos = content.index("Host eu-alpha-01")
+        zebra_pos = content.index("Host eu-zebra-01")
+
+        # Jumphost first, then sorted others
+        assert jumphost_pos < alpha_pos < zebra_pos
+
+
+# ---------------------------------------------------------------------------
+# create_ssh_config — file creation and force behavior
+# ---------------------------------------------------------------------------
+
+
+class TestCreateSshConfig:
+    """Tests for SSH config file creation."""
+
+    def test_force_clears_existing_known_hosts(self, tmp_path):
+        """With force=True, existing known_hosts is reset (cleared)."""
+        ssh_dir = tmp_path / ".ssh"
+        ssh_dir.mkdir()
+        known_hosts = ssh_dir / SSH_KNOWN_HOSTS_FILENAME
+        known_hosts.write_text("old-host.example.com ssh-rsa AAAA...\n")
+
+        marker = {"hosts": {"web": {"private_ip_address": "10.0.0.12"}}}
+        create_ssh_config(tmp_path, marker, "eu", force=True)
+
+        # known_hosts should be empty (touched/reset)
+        assert known_hosts.read_text() == ""
+
+    def test_force_false_preserves_known_hosts(self, tmp_path):
+        """Without force, existing known_hosts is preserved."""
+        ssh_dir = tmp_path / ".ssh"
+        ssh_dir.mkdir()
+        known_hosts = ssh_dir / SSH_KNOWN_HOSTS_FILENAME
+        old_content = "existing-host.example.com ssh-rsa AAAA...\n"
+        known_hosts.write_text(old_content)
+
+        # First create config file so we don't hit FileExistsError
+        config_file = ssh_dir / "config"
+        config_file.touch()
+
+        marker = {"hosts": {"web": {"private_ip_address": "10.0.0.12"}}}
+
+        # force=False should raise because config exists
+        with pytest.raises(FileExistsError):
+            create_ssh_config(tmp_path, marker, "eu", force=False)
+
+        # known_hosts should still have original content
+        assert known_hosts.read_text() == old_content
+
+    def test_invalid_ssh_port_env_falls_back_to_22(self, tmp_path, monkeypatch):
+        """Invalid SSH_PORT env var falls back to port 22."""
+        monkeypatch.setenv("SSH_PORT", "not-a-number")
+
+        marker = {"hosts": {"web": {"private_ip_address": "10.0.0.12"}}}
+        config_path = create_ssh_config(tmp_path, marker, "eu")
+
+        content = config_path.read_text()
+        assert "Port                      22" in content
+
+    def test_valid_ssh_port_env_is_used(self, tmp_path, monkeypatch):
+        """Valid SSH_PORT env var is used."""
+        monkeypatch.setenv("SSH_PORT", "2222")
+
+        marker = {"hosts": {"web": {"private_ip_address": "10.0.0.12"}}}
+        config_path = create_ssh_config(tmp_path, marker, "eu")
+
+        content = config_path.read_text()
+        assert "Port                      2222" in content
+
+    def test_creates_ssh_dir_if_missing(self, tmp_path):
+        """SSH dir is created if it doesn't exist."""
+        marker = {"hosts": {"web": {"private_ip_address": "10.0.0.12"}}}
+        config_path = create_ssh_config(tmp_path, marker, "eu")
+
+        assert (tmp_path / ".ssh").is_dir()
+        assert config_path.exists()
+
+    def test_creates_known_hosts_if_missing(self, tmp_path):
+        """known_hosts is created if it doesn't exist."""
+        marker = {"hosts": {"web": {"private_ip_address": "10.0.0.12"}}}
+        create_ssh_config(tmp_path, marker, "eu")
+
+        known_hosts = tmp_path / ".ssh" / SSH_KNOWN_HOSTS_FILENAME
+        assert known_hosts.exists()
