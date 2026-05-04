@@ -26,6 +26,7 @@ from ots_shared.ssh.env import (
     create_envrc_template,
     create_gitignore,
     create_marker,
+    create_peers_toml,
     create_ssh_config,
     load_marker,
 )
@@ -157,7 +158,16 @@ def init(
             force=force,
         )
 
-    for create_fn in (create_gitignore, create_envrc_template, _trust_step, _ssh_config_step):
+    def _peers_toml_step(target: Path, *, force: bool = False) -> Path:
+        return create_peers_toml(target, environment, force=force)
+
+    for create_fn in (
+        create_gitignore,
+        create_envrc_template,
+        _trust_step,
+        _ssh_config_step,
+        _peers_toml_step,
+    ):
         try:
             path = create_fn(target, force=force)
             print(f"Created {path}")

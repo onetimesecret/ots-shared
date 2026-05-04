@@ -144,6 +144,7 @@ class TestInitErrorCases:
 class TestInitDefaultEnvironmentFallback:
     """Edge case: environment falls back to 'default' when directory name is empty."""
 
+    @patch("ots_shared.init.create_peers_toml")
     @patch("ots_shared.init.create_ssh_config")
     @patch("ots_shared.init.create_trust_material")
     @patch("ots_shared.init.load_marker")
@@ -158,6 +159,7 @@ class TestInitDefaultEnvironmentFallback:
         mock_load_marker,
         mock_create_trust_material,
         mock_create_ssh_config,
+        mock_create_peers_toml,
     ):
         """Path('/').resolve().name is '', so environment should fall back to 'default'."""
         mock_create_marker.return_value = Path("/otsinfra.yaml")
@@ -166,6 +168,7 @@ class TestInitDefaultEnvironmentFallback:
         mock_load_marker.return_value = {}
         mock_create_trust_material.return_value = Path("/.trust")
         mock_create_ssh_config.return_value = Path("/.ssh/config")
+        mock_create_peers_toml.return_value = Path("/peers.toml")
 
         init(directory=Path("/"))
 
