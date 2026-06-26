@@ -28,6 +28,7 @@ from .executor import (
     SSHExecutor,
     is_remote,
 )
+from .known_hosts import prune_known_hosts
 
 __all__ = [
     "find_env_file",
@@ -44,6 +45,7 @@ __all__ = [
     "Result",
     "SSHExecutor",
     "is_remote",
+    "prune_known_hosts",
     "ssh_connect",
 ]
 
