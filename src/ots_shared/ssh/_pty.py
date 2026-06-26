@@ -124,7 +124,7 @@ def interactive_loop(
         stdout_buffer = sys.stdout.buffer
 
     while True:
-        readable, _, _ = select.select([channel, stdin_fd], [], [], 0.1)  # type: ignore[arg-type]
+        readable, _, _ = select.select([channel, stdin_fd], [], [], 0.1)  # pyright: ignore[reportArgumentType]
 
         if channel in readable:
             if channel.recv_ready():  # type: ignore[union-attr]
