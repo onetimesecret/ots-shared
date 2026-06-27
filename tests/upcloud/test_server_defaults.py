@@ -22,6 +22,7 @@ from ots_shared.upcloud.server_defaults import (
     format_traffic,
     get_server_or_exit,
     load_cloud_init_user_data,
+    marker_network_name_upcloud,
     resolve_host_defaults,
 )
 
@@ -84,6 +85,36 @@ class TestResolveHostDefaults:
         with find, load:
             with pytest.raises(SystemExit, match="no 'hosts' block"):
                 resolve_host_defaults(role=None, name="web-prod")
+
+    def test_ssh_env_import_unavailable_returns_none(self):
+        # When ots_shared.ssh.env cannot be imported (slimmed install), the
+        # resolver degrades to None rather than crashing (lines ~95-96).
+        import builtins
+
+        real_import = builtins.__import__
+
+        def fake_import(name, *args, **kwargs):
+            if name == "ots_shared.ssh.env":
+                raise ImportError("ssh extras not installed")
+            return real_import(name, *args, **kwargs)
+
+        with patch.object(builtins, "__import__", side_effect=fake_import):
+            assert resolve_host_defaults(role=None, name="web-prod") is None
+
+    def test_empty_hosts_block_fail_loud(self):
+        # 'hosts' present but empty → distinct fail-loud message (line ~112).
+        find, load = _patched({})
+        with find, load:
+            with pytest.raises(SystemExit, match="'hosts' block is empty"):
+                resolve_host_defaults(role=None, name="web-01")
+
+    def test_host_not_a_mapping_fail_loud(self):
+        # An explicit role resolving to a non-dict host value fails loud
+        # (line ~119).
+        find, load = _patched({"web": "not-a-mapping"})
+        with find, load:
+            with pytest.raises(SystemExit, match="hosts.web must be a mapping"):
+                resolve_host_defaults(role="web", name="web-01")
 
     def test_region_str_resolves(self):
         find, load = _patched({"web": {"server_type": "2xCPU-4GB", "region": "de-fra1"}})
@@ -204,6 +235,13 @@ class TestLoadCloudInit:
         with pytest.raises(SystemExit, match="failed"):
             load_cloud_init_user_data(None, cmd="exit 7")
 
+    def test_command_failure_surfaces_stderr(self, capsys):
+        # A failing command with stderr output echoes that stderr before the
+        # SystemExit (line ~228), so the operator sees the underlying error.
+        with pytest.raises(SystemExit, match="failed"):
+            load_cloud_init_user_data(None, cmd="echo boom-detail >&2; exit 3")
+        assert "boom-detail" in capsys.readouterr().err
+
     def test_empty_command_output_raises(self):
         with pytest.raises(SystemExit, match="no output"):
             load_cloud_init_user_data(None, cmd="true")
@@ -235,6 +273,24 @@ class TestGetServerOrExit:
         ]
         with pytest.raises(SystemExit, match="Multiple servers"):
             get_server_or_exit(mgr, "web-01")
+
+
+# ---------------------------------------------------------------------------
+# marker_network_name_upcloud — thin alias over the neutral helper
+# ---------------------------------------------------------------------------
+
+
+class TestMarkerNetworkNameUpcloud:
+    def test_delegates_to_neutral_helper(self):
+        # The UpCloud alias is a pass-through over the provider-neutral
+        # marker_network_name; it forwards the path and returns the result
+        # verbatim (line ~153).
+        with patch(
+            "ots_shared.upcloud.server_defaults.marker_network_name",
+            return_value="priv-net",
+        ) as neutral:
+            assert marker_network_name_upcloud(FAKE_MARKER) == "priv-net"
+        neutral.assert_called_once_with(FAKE_MARKER)
 
 
 # ---------------------------------------------------------------------------

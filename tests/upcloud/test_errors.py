@@ -9,6 +9,26 @@ from upcloud_api import UpCloudAPIError, UpCloudClientError
 from ots_shared.upcloud.errors import api_errors, is_retryable, with_backoff
 
 
+class TestExceptionShape:
+    """Lock the real UpCloudAPIError shape so a refactor that assumes a
+    ``.status_code`` (Hetzner-style) is caught.
+
+    UpCloud exceptions carry ``error_code`` / ``error_message`` and have
+    **no** ``status_code`` — the status-based branching in errors.py infers
+    from the code/message instead. These assertions are verified against the
+    live SDK, not docs.
+    """
+
+    def test_upcloud_api_error_has_no_status_code(self):
+        exc = UpCloudAPIError("INVALID_REQUEST", "x")
+        assert not hasattr(exc, "status_code")
+
+    def test_upcloud_api_error_carries_code_and_message(self):
+        exc = UpCloudAPIError("INVALID_REQUEST", "x")
+        assert exc.error_code == "INVALID_REQUEST"
+        assert exc.error_message == "x"
+
+
 class TestAPIError:
     def test_generic_api_error_exit_1(self, capsys):
         with pytest.raises(SystemExit) as exc_info:

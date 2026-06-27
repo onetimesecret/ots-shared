@@ -177,6 +177,96 @@ class TestParseMarkerValidation:
 
 
 # ---------------------------------------------------------------------------
+# parse_marker — type/edge validation branches
+# ---------------------------------------------------------------------------
+
+
+class TestParseMarkerTypeEdges:
+    """Bad-input branches that surface the actual diagnostic text. Each case
+    reflects the real validation in network_plan.py (exit 65)."""
+
+    @pytest.mark.parametrize(
+        ("marker", "substring"),
+        [
+            # marker root must be a mapping (parse_marker line ~220).
+            (["not", "a", "mapping"], "marker root must be a mapping"),
+            ("a string", "marker root must be a mapping"),
+            (None, "marker root must be a mapping"),
+        ],
+    )
+    def test_marker_root_not_a_mapping(self, marker, substring, capsys):
+        _assert_fail(marker, substring, capsys)
+
+    @pytest.mark.parametrize(
+        ("hosts", "substring"),
+        [
+            # 'hosts' must be a mapping (parse_marker line ~255).
+            ("not-a-dict", "'hosts' must be a mapping"),
+            (["a", "b"], "'hosts' must be a mapping"),
+            (42, "'hosts' must be a mapping"),
+        ],
+    )
+    def test_hosts_not_a_mapping(self, hosts, substring, capsys):
+        _assert_fail(_marker(hosts), substring, capsys)
+
+    @pytest.mark.parametrize(
+        ("ip", "substring"),
+        [
+            # private_ip_address wrong type → must be a non-empty str (line ~137).
+            (123, "must be a non-empty str"),
+            ("", "must be a non-empty str"),
+            ([], "must be a non-empty str"),
+            # private_ip_address bad value → not a valid IP (line ~144-145).
+            ("999.999.999.999", "not a valid IP"),
+            ("garbage", "not a valid IP"),
+        ],
+    )
+    def test_private_ip_address_bad_input(self, ip, substring, capsys):
+        _assert_fail(_marker({"db": {"private_ip_address": ip}}), substring, capsys)
+
+    @pytest.mark.parametrize(
+        ("cidr", "substring"),
+        [
+            # private_ip_cidr wrong type → must be a non-empty str (line ~168).
+            (123, "private_ip_cidr must be a non-empty str"),
+            ("", "private_ip_cidr must be a non-empty str"),
+            # private_ip_cidr bad value → not a valid CIDR (line ~175-176).
+            ("10.0.0.0/99", "not a valid CIDR"),
+            ("nonsense", "not a valid CIDR"),
+            # private_ip_cidr non-host-bits-clear is rejected by strict parse.
+            ("10.0.0.5/24", "not a valid CIDR"),
+            # valid IPv6 CIDR → wrong family (line ~181).
+            ("fd00::/64", "private_ip_cidr must be IPv4"),
+        ],
+    )
+    def test_private_ip_cidr_bad_input(self, cidr, substring, capsys):
+        _assert_fail(_marker({"db": {"private_ip_cidr": cidr}}), substring, capsys)
+
+    def test_non_dict_host_section_skipped(self):
+        # A non-dict host value is a foreign-tool section and is skipped, not
+        # validated (line ~161). The marker still parses cleanly.
+        m = _marker({"caddy": "some-scalar", "db": {"private_ip_address": "10.0.0.11"}})
+        ds = parse_marker(m, marker_path=MARKER_PATH)
+        assert ds.network.name == "priv-net"
+
+    def test_non_dict_ordinal_entry_skipped(self):
+        # A non-dict per-ordinal value is skipped (line ~196); valid siblings
+        # are still validated and the marker parses.
+        m = _marker(
+            {
+                "web": {
+                    "ordinals": {
+                        "01": "not-a-dict",
+                        "02": {"private_ip_address": "10.0.0.22"},
+                    }
+                }
+            }
+        )
+        ds = parse_marker(m, marker_path=MARKER_PATH)
+        assert ds.network.name == "priv-net"
+
+
+# ---------------------------------------------------------------------------
 # diff_state
 # ---------------------------------------------------------------------------
 
@@ -221,6 +311,29 @@ class TestDiffState:
         )
         actions = diff_state(self._desired(), net)
         assert actions[0].kind == "ok"
+
+    def test_object_ip_networks_entry_with_address_attr(self):
+        # A non-dict ip_networks entry exposing .address is read via getattr
+        # (_current_ip_range lines ~283-285), not subscripting.
+        entry = MagicMock(spec=["address"])
+        entry.address = "10.0.0.0/24"
+        net = _mock_network(ip_networks=[entry])
+        actions = diff_state(self._desired(), net)
+        assert actions[0].kind == "ok"
+
+    def test_no_extractable_range_is_drift(self):
+        # ip_networks present but yields no usable address, and no flattened
+        # ip_range/address fallback → _current_ip_range returns None (line ~290),
+        # so the desired range can't match → drift.
+        entry = MagicMock(spec=["address"])
+        entry.address = None
+        net = MagicMock(spec=["uuid", "ip_networks"])
+        net.uuid = "net-1"
+        net.ip_networks = [entry]
+        actions = diff_state(self._desired(), net)
+        assert len(actions) == 1
+        assert actions[0].kind == "drift"
+        assert "current=None" in actions[0].message
 
 
 def test_action_is_frozen():
