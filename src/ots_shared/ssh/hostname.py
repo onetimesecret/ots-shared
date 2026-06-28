@@ -18,9 +18,13 @@ Contract (USER-PINNED, see issue #59 follow-on):
   before reaching this module.
 * ``marker['env_name']`` is **required** and non-empty. Missing →
   :class:`MarkerEnvNameMissing`.
-* The parsed env prefix must equal ``marker['env_name']``. Mismatch
-  → :class:`HostnameEnvMismatch`. Empty env prefix (e.g. ``db-01``)
-  → :class:`HostnameEmptyEnv`.
+* The parsed env prefix must equal ``marker['env_name']`` **or** be a
+  known jurisdiction code (``ots_shared.taxonomy.KNOWN_JURISDICTIONS``).
+  The latter allows jurisdiction-prefixed hostnames like ``uk-web-01``
+  inside an ``env_name: eu`` marker — the leading 2-letter country code
+  is accepted even though it differs from the env name. Anything that is
+  neither → :class:`HostnameEnvMismatch`. Empty env prefix (e.g.
+  ``db-01``) → :class:`HostnameEmptyEnv`.
 * The role is selected by walking the longest-to-shortest suffix of
   the post-ordinal remainder against ``marker['hosts']`` — first hit
   wins. No suffix matches → :class:`HostnameNoRoleMatch`.
@@ -39,6 +43,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
+
+from ots_shared.taxonomy import KNOWN_JURISDICTIONS
 
 __all__ = (
     "ParsedHostname",
@@ -82,7 +88,7 @@ class HostnameEmptyEnv(HostnameError):  # noqa: N818
 
 
 class HostnameEnvMismatch(HostnameError):  # noqa: N818
-    """The parsed env does not equal ``marker['env_name']``."""
+    """The parsed env is neither ``marker['env_name']`` nor a known jurisdiction."""
 
 
 class MarkerEnvNameMissing(HostnameError):  # noqa: N818
@@ -129,14 +135,16 @@ def parse_hostname(hostname: str, marker: dict[str, Any]) -> ParsedHostname:
        ``-``). The first candidate present as a key in
        ``marker['hosts']`` wins → that is the role; everything before
        (with the trailing ``-`` stripped) is the env prefix.
-    3. Validate: env equals ``marker['env_name']``, env is non-empty,
-       role exists in ``marker['hosts']``.
+    3. Validate: env equals ``marker['env_name']`` OR is a known
+       jurisdiction code, env is non-empty, role exists in
+       ``marker['hosts']``.
 
     The marker is **required**. Missing ``env_name`` →
     :class:`MarkerEnvNameMissing`. Empty env prefix →
     :class:`HostnameEmptyEnv`. No suffix matches →
-    :class:`HostnameNoRoleMatch`. Env prefix differs from
-    ``marker['env_name']`` → :class:`HostnameEnvMismatch`.
+    :class:`HostnameNoRoleMatch`. Env prefix is neither
+    ``marker['env_name']`` nor a known jurisdiction →
+    :class:`HostnameEnvMismatch`.
     """
     if not isinstance(hostname, str) or not hostname:
         raise HostnameError(f"hostname must be a non-empty str, got {hostname!r}")
@@ -191,10 +199,14 @@ def parse_hostname(hostname: str, marker: dict[str, Any]) -> ParsedHostname:
             f"expected {expected_env!r}-{role}-<ordinal>"
         )
 
-    if env != expected_env:
+    # The env prefix is valid if it matches the marker's env_name OR is a
+    # known jurisdiction code (e.g. uk-web-01 inside an env_name: eu marker).
+    # A genuinely unknown prefix (typo) still fails loud.
+    if env != expected_env and env not in KNOWN_JURISDICTIONS:
         raise HostnameEnvMismatch(
             f"hostname {hostname!r} env prefix {env!r} does not match "
-            f"marker env_name {expected_env!r}"
+            f"marker env_name {expected_env!r} and is not a known jurisdiction "
+            f"code (see ots_shared.taxonomy.KNOWN_JURISDICTIONS)"
         )
 
     return ParsedHostname(env=env, role=role, ordinal=ordinal)

@@ -66,9 +66,7 @@ def test_simple_env_role_ordinal(make_marker: Callable[..., dict]) -> None:
 
 
 def test_multi_segment_env(make_marker: Callable[..., dict]) -> None:
-    result = parse_hostname(
-        "eu-example-db-01", make_marker(env_name="eu-example", hosts=("db",))
-    )
+    result = parse_hostname("eu-example-db-01", make_marker(env_name="eu-example", hosts=("db",)))
     assert result.env == "eu-example"
     assert result.role == "db"
     assert result.ordinal == "01"
@@ -85,9 +83,7 @@ def test_longest_suffix_match_wins(make_marker: Callable[..., dict]) -> None:
 
 
 def test_jumphost_role(make_marker: Callable[..., dict]) -> None:
-    result = parse_hostname(
-        "eu-jumphost-01", make_marker(env_name="eu", hosts=("jumphost",))
-    )
+    result = parse_hostname("eu-jumphost-01", make_marker(env_name="eu", hosts=("jumphost",)))
     assert result.env == "eu"
     assert result.role == "jumphost"
     assert result.ordinal == "01"
@@ -95,18 +91,14 @@ def test_jumphost_role(make_marker: Callable[..., dict]) -> None:
 
 def test_no_trailing_digits_default_ordinal(make_marker: Callable[..., dict]) -> None:
     """No trailing digit segment → ordinal defaults to '01'."""
-    result = parse_hostname(
-        "ots-web-test", make_marker(env_name="ots-web", hosts=("test",))
-    )
+    result = parse_hostname("ots-web-test", make_marker(env_name="ots-web", hosts=("test",)))
     assert result.env == "ots-web"
     assert result.role == "test"
     assert result.ordinal == "01"
 
 
 def test_no_trailing_digits_multi_token_role(make_marker: Callable[..., dict]) -> None:
-    result = parse_hostname(
-        "ots-web-test", make_marker(env_name="ots", hosts=("web-test",))
-    )
+    result = parse_hostname("ots-web-test", make_marker(env_name="ots", hosts=("web-test",)))
     assert result.env == "ots"
     assert result.role == "web-test"
     assert result.ordinal == "01"
@@ -130,11 +122,37 @@ def test_no_role_match_raises(make_marker: Callable[..., dict]) -> None:
 def test_env_mismatch_raises_with_both_values_in_message(
     make_marker: Callable[..., dict],
 ) -> None:
+    # 'xx' is neither the env_name nor a known jurisdiction code, so it
+    # fails loud. (A real jurisdiction prefix like 'eu' is now accepted —
+    # see test_known_jurisdiction_prefix_accepted.)
     with pytest.raises(HostnameEnvMismatch) as exc_info:
-        parse_hostname("eu-db-01", make_marker(env_name="ca", hosts=("db",)))
+        parse_hostname("xx-db-01", make_marker(env_name="ca", hosts=("db",)))
     msg = str(exc_info.value)
-    assert "eu" in msg
+    assert "xx" in msg
     assert "ca" in msg
+
+
+def test_known_jurisdiction_prefix_accepted(
+    make_marker: Callable[..., dict],
+) -> None:
+    """A leading known jurisdiction code is accepted even if it differs from env_name.
+
+    Enables jurisdiction-prefixed hostnames (e.g. uk-web-01) inside an
+    env_name: eu marker — the original motivation for folding
+    KNOWN_JURISDICTIONS into the env validation.
+    """
+    result = parse_hostname("uk-web-01", make_marker(env_name="eu", hosts=("web",)))
+    assert result.env == "uk"
+    assert result.role == "web"
+    assert result.ordinal == "01"
+
+
+def test_unknown_non_jurisdiction_prefix_still_raises(
+    make_marker: Callable[..., dict],
+) -> None:
+    """A prefix that is neither env_name nor a jurisdiction code still fails loud."""
+    with pytest.raises(HostnameEnvMismatch):
+        parse_hostname("zz-web-01", make_marker(env_name="eu", hosts=("web",)))
 
 
 def test_marker_missing_env_name_raises() -> None:
