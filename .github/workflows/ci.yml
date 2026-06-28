@@ -27,7 +27,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       - name: Install dependencies
-        run: uv sync --extra test --extra ssh
+        run: uv sync --extra test --extra ssh --extra digitalocean
 
       - name: Run tests with coverage
         run: |
@@ -62,7 +62,7 @@ jobs:
           python-version: '3.11'
 
       - name: Install dependencies
-        run: uv sync --extra dev --extra ssh
+        run: uv sync --extra dev --extra ssh --extra digitalocean
 
       - name: Run ruff linter
         run: uv run ruff check src/
