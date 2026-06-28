@@ -84,3 +84,51 @@ class TestGetHostIpDoesNotAlias:
         }
         result = get_host_ip(marker, "web", "01")
         assert result != "10.101.0.11"
+
+
+class TestGetHostIpSidecarFallback:
+    """Step 4: the resolved-IP sidecar (DigitalOcean auto-assigned IPs).
+
+    The marker carries NO ``private_ip_*`` (forbidden on DO §5.4a), so the
+    assigned IP is recovered from ``.trust/resolved-ips.yaml`` keyed by the
+    reconstructed ``<env>-<role>-<ordinal>`` hostname. All paths use
+    ``tmp_path`` + an explicit ``marker_dir`` so no real ``.trust/`` is read.
+    """
+
+    def test_sidecar_resolves_when_marker_has_no_ip(self, tmp_path) -> None:
+        from ots_shared.resolved_ip import write_resolved_ip
+
+        write_resolved_ip("eu-web-01", "10.124.0.7", marker_dir=tmp_path)
+        marker = {"env_name": "eu", "hosts": {"web": {"server_type": "s-1vcpu-1gb"}}}
+        assert get_host_ip(marker, "web", "01", marker_dir=tmp_path) == "10.124.0.7"
+
+    def test_sidecar_honours_ordinal_in_hostname_key(self, tmp_path) -> None:
+        from ots_shared.resolved_ip import write_resolved_ip
+
+        write_resolved_ip("eu-web-02", "10.124.0.8", marker_dir=tmp_path)
+        marker = {"env_name": "eu", "hosts": {"web": {}}}
+        assert get_host_ip(marker, "web", "02", marker_dir=tmp_path) == "10.124.0.8"
+        # Ordinal 01 has no sidecar entry and no marker IP → None.
+        assert get_host_ip(marker, "web", "01", marker_dir=tmp_path) is None
+
+    def test_marker_pinned_ip_wins_over_sidecar(self, tmp_path) -> None:
+        # Hetzner case: marker carries the pinned IP, so steps 1-3 return
+        # first and the sidecar is never consulted (even if one exists).
+        from ots_shared.resolved_ip import write_resolved_ip
+
+        write_resolved_ip("eu-web-01", "10.124.0.7", marker_dir=tmp_path)
+        marker = {"env_name": "eu", "hosts": {"web": {"private_ip_address": "10.101.1.11"}}}
+        assert get_host_ip(marker, "web", "01", marker_dir=tmp_path) == "10.101.1.11"
+
+    def test_no_env_name_skips_sidecar(self, tmp_path) -> None:
+        # Cannot build the hostname key without env_name → return None,
+        # never raise (no behaviour change for minimal markers).
+        from ots_shared.resolved_ip import write_resolved_ip
+
+        write_resolved_ip("eu-web-01", "10.124.0.7", marker_dir=tmp_path)
+        marker = {"hosts": {"web": {}}}
+        assert get_host_ip(marker, "web", "01", marker_dir=tmp_path) is None
+
+    def test_no_sidecar_entry_returns_none(self, tmp_path) -> None:
+        marker = {"env_name": "eu", "hosts": {"web": {}}}
+        assert get_host_ip(marker, "web", "01", marker_dir=tmp_path) is None

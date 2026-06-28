@@ -1,6 +1,6 @@
 [project]
 name = "ots-shared"
-version = "0.4.2"
+version = "0.5.0"
 description = "Shared constants and utilities for OTS operations tools"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -31,6 +31,12 @@ Issues = "https://github.com/onetimesecret/ots-shared/issues"
 
 [project.optional-dependencies]
 ssh = ["paramiko>=3.4"]
+# DigitalOcean provider support (ots_shared.digitalocean). pydo drags in the
+# Azure stack (azure-core et al.), materially heavier than the lean hcloud /
+# upcloud-api deps, so it is opt-in (multi-provider.md §6b). Importing the
+# package never requires it — only Config.get_client / the error classifier do,
+# and both fail loud with an install hint when it is absent.
+digitalocean = ["pydo>=0.36"]
 dev = ["pyright>=1.1.390", "ruff>=0.7"]
 test = ["pytest>=8.0", "pytest-mock>=3.14", "pytest-cov>=5.0"]
 
