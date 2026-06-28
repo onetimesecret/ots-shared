@@ -15,7 +15,7 @@ types leak out.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from typing import Any
 
 from .errors import with_backoff
@@ -25,7 +25,7 @@ PER_PAGE_MAX = 200
 
 
 def list_all(
-    fetch_page: Callable[..., dict],
+    fetch_page: Callable[..., Mapping[str, Any]],
     key: str,
     *,
     per_page: int = PER_PAGE_MAX,
