@@ -526,7 +526,13 @@ def get_host_public_net(marker: dict, role: str, ordinal: str = "01") -> HostPub
     )
 
 
-def get_host_ip(marker: dict, role: str, ordinal: str = "01") -> str | None:
+def get_host_ip(
+    marker: dict,
+    role: str,
+    ordinal: str = "01",
+    *,
+    marker_dir: Path | None = None,
+) -> str | None:
     """Resolve the per-ordinal private IP for *role* from loaded marker data.
 
     Resolution order (first non-empty wins):
@@ -538,9 +544,18 @@ def get_host_ip(marker: dict, role: str, ordinal: str = "01") -> str | None:
        to work for the canonical first instance and returns ``None`` for
        higher ordinals instead of silently aliasing.
     3. ``hosts.<role>.private_ip_cidr`` + assignment strategy — computed.
+    4. Resolved-IP sidecar (``.trust/resolved-ips.yaml``) — providers that
+       *assign* private IPs automatically (DigitalOcean) cannot pin them in
+       the marker (§5.4a), so ``lots deploy`` persists the assigned IP there
+       and we consult it before giving up. Hetzner/UpCloud pin IPs in the
+       marker, so steps 1-3 already returned and this is never reached.
 
     Returns ``None`` when no source is configured. Callers that require
     a value must check and fail loud at their layer.
+
+    ``marker_dir`` locates the sidecar (the directory holding ``otsinfra.yaml``).
+    When ``None`` it is resolved lazily via :func:`find_marker` walking up from
+    cwd — matching how every other marker-dependent command finds it.
     """
     hosts = marker.get("hosts", {})
     if not isinstance(hosts, dict):
@@ -574,6 +589,26 @@ def get_host_ip(marker: dict, role: str, ordinal: str = "01") -> str | None:
             formula if isinstance(formula, str) else None,
             marker,
         )
+
+    # 4. Resolved-IP sidecar fallback. Only reachable when the marker carries
+    #    no IP for this role (the DO/auto-assign case). We reconstruct the
+    #    ``<env>-<role>-<ordinal>`` hostname the sidecar is keyed by; if the
+    #    marker has no usable ``env_name`` we cannot build the key, so we skip
+    #    and return None exactly as before (no behaviour change for callers
+    #    that never write a sidecar).
+    env_name = marker.get("env_name") if isinstance(marker, dict) else None
+    if isinstance(env_name, str) and env_name:
+        resolved_dir = marker_dir
+        if resolved_dir is None:
+            located = find_marker()
+            resolved_dir = located.parent if located is not None else None
+        if resolved_dir is not None:
+            from ots_shared.resolved_ip import get_resolved_ip
+
+            hostname = f"{env_name}-{role}-{ordinal}"
+            sidecar_ip = get_resolved_ip(hostname, marker_dir=resolved_dir)
+            if sidecar_ip:
+                return sidecar_ip
 
     return None
 
