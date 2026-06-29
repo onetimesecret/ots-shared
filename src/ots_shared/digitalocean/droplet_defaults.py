@@ -49,6 +49,36 @@ logger = logging.getLogger(__name__)
 # over-limit payload fails fast rather than after a wasted create round-trip.
 USER_DATA_LIMIT_BYTES: int = 64 * 1024
 
+
+def _reject_non_ascii(content: str, source: str) -> None:
+    """Fail loud if ``content`` contains any non-ASCII character.
+
+    DigitalOcean's cloud-init decodes user_data as a byte string and its YAML
+    loader rejects bytes >= 0x80 ("unacceptable character #x0080: special
+    characters are not allowed"). The whole blob is then discarded as "empty
+    cloud config", so the droplet boots with no deploy user and seals itself
+    via the sshd hardening — a silent, total lockout that only shows up in the
+    instance's cloud-init log. ``yaml.safe_load`` does NOT catch this: Python
+    decodes the file as UTF-8 and accepts the same bytes DO rejects.
+
+    A stray em-dash/arrow in a generated comment is the usual culprit, so the
+    fix is to keep cloud-init ASCII-only and surface the offending character
+    here — at generation/upload time — rather than after the create round-trip.
+    """
+    for index, char in enumerate(content):
+        if ord(char) > 0x7F:
+            start = max(0, index - 30)
+            snippet = content[start : index + 30].replace("\n", "\\n")
+            raise SystemExit(
+                f"Cloud-init ({source}) contains a non-ASCII character "
+                f"{char!r} (U+{ord(char):04X}) at position {index}, which "
+                f"DigitalOcean's cloud-init rejects (it silently discards the "
+                f"entire payload and the droplet locks itself out). "
+                f"Context: ...{snippet}...  "
+                f"Strip it, e.g. LC_ALL=C tr -cd '\\11\\12\\15\\40-\\176' < in > out"
+            )
+
+
 # Marker keys that pin a private IP. DO assigns these automatically and cannot
 # honor them, so their presence is a hard error (multi-provider.md §5.4a).
 _PINNED_IP_KEYS = (
@@ -246,6 +276,8 @@ def load_cloud_init_user_data(
     raw_size = len(raw_bytes)
 
     print(f"Loaded cloud-init from {source} ({raw_size} bytes)", file=sys.stderr)
+
+    _reject_non_ascii(content, source)
 
     if max_bytes is not None and raw_size > max_bytes:
         raise SystemExit(
