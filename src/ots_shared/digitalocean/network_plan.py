@@ -11,9 +11,10 @@ The DigitalOcean model is the flattest of the three providers:
     single ``ip_range`` for a region-scoped VPC; there is no ``create_subnet`` /
     ``add_route`` (multi-provider.md §5.2). So :class:`DesiredState` carries
     exactly one :class:`NetworkSpec` and there is no ``SubnetSpec``.
-  * **Atomic region.** ``region == zone``; there is no ``network_zone``
-    grouping. The VPC's ``region`` is the same atomic slug used by droplets — a
-    ``network_zone`` key is fail-loud to catch a Hetzner-shaped marker.
+  * **Atomic region.** ``region == zone``; there is no network-zone
+    grouping. The marker locator key is ``network.zone`` (standardized across
+    providers); its value is the atomic region slug also used by droplets. A
+    legacy ``region`` or ``network_zone`` key is fail-loud with a rename hint.
   * **No pinned private IPs.** DO assigns droplet private IPs sequentially, so a
     host-level ``private_ip_*`` field is fail-loud (§5.4a) rather than validated
     against the range.
@@ -139,11 +140,12 @@ def parse_marker(marker: dict, *, marker_path: Path) -> DesiredState:
     Required keys under the top-level ``network:`` block:
       - ``name`` — non-empty str
       - ``ip_range`` — IPv4 CIDR /8–/28
-      - ``region`` — the atomic region slug (e.g. ``nyc3``). There is **no**
-        ``network_zone`` for DO; a ``network_zone`` key is fail-loud to catch a
-        Hetzner-shaped marker.
+      - ``zone`` — the atomic region slug (e.g. ``nyc3``). DO regions are
+        atomic, so the locator carries the region slug; the marker key is
+        ``zone`` for every provider (a legacy ``region`` or ``network_zone``
+        key is fail-loud with a rename hint).
 
-    Host-level ``private_ip_*`` fields are fail-loud (§5.4a). The region is
+    Host-level ``private_ip_*`` fields are fail-loud (§5.4a). The slug is
     validated against :data:`KNOWN_REGIONS` only as a warning-grade hint — an
     unknown-but-well-formed slug is accepted (the catalog grows; the server-side
     call is authoritative).
@@ -155,26 +157,34 @@ def parse_marker(marker: dict, *, marker_path: Path) -> DesiredState:
     if network_block is None:
         _fail(
             marker_path,
-            "missing top-level 'network:' block. Expected keys: name, ip_range, region.",
+            "missing top-level 'network:' block. Expected keys: name, ip_range, zone.",
         )
     if not isinstance(network_block, dict):
         _fail(marker_path, f"'network' must be a mapping, got {type(network_block).__name__}")
 
-    if "network_zone" in network_block:
+    if "zone" not in network_block and "network_zone" in network_block:
         _fail(
             marker_path,
-            "network.network_zone is not valid for DigitalOcean (regions are atomic; "
-            "use network.region with an atomic region slug like nyc3).",
+            "network.network_zone has been renamed to network.zone. Rename the key "
+            "under the 'network:' block in otsinfra.yaml (the value is unchanged): "
+            "'network_zone:' -> 'zone:' (an atomic region slug like nyc3).",
+        )
+    if "zone" not in network_block and "region" in network_block:
+        _fail(
+            marker_path,
+            "network.region has been renamed to network.zone. Rename the key "
+            "under the 'network:' block in otsinfra.yaml (the value is unchanged): "
+            "'region:' -> 'zone:' (an atomic region slug like nyc3).",
         )
 
     name = _require_str(marker_path, "name", network_block.get("name"))
     ip_range = _require_str(marker_path, "ip_range", network_block.get("ip_range"))
-    region = _require_str(marker_path, "region", network_block.get("region"))
+    region = _require_str(marker_path, "zone", network_block.get("zone"))
 
     if region not in KNOWN_REGIONS:
         # Non-fatal: print a hint but accept it (catalog grows over time).
         print(
-            f"{marker_path}: warning: network.region {region!r} is not in the known "
+            f"{marker_path}: warning: network.zone {region!r} is not in the known "
             f"DigitalOcean region set {sorted(KNOWN_REGIONS)}; proceeding (server-side "
             f"validation is authoritative).",
             file=sys.stderr,

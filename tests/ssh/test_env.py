@@ -674,7 +674,7 @@ class TestGetHostIp:
             "network": {
                 "name": "n",
                 "ip_range": "10.103.0.0/16",
-                "network_zone": "eu-central",
+                "zone": "eu-central",
             },
             "hosts": {
                 "web": {
@@ -697,7 +697,7 @@ class TestGetHostIp:
             "network": {
                 "name": "n",
                 "ip_range": "10.103.0.0/16",
-                "network_zone": "eu-central",
+                "zone": "eu-central",
             },
             "hosts": {
                 "web": {
@@ -878,7 +878,7 @@ class TestDeriveRegionId:
             "network": {
                 "name": "n",
                 "ip_range": "10.103.0.0/16",
-                "network_zone": "eu-central",
+                "zone": "eu-central",
             }
         }
         assert _derive_region_id(marker) == 3

@@ -491,7 +491,7 @@ class TestMarkerNetworkName:
             {
                 "name": "priv-net",
                 "ip_range": "10.101.0.0/16",
-                "network_zone": "eu-central",
+                "zone": "eu-central",
             }
         )
         with find, load:
@@ -522,7 +522,7 @@ class TestMarkerNetworkName:
                     "network": {
                         "name": "explicit-net",
                         "ip_range": "10.50.0.0/16",
-                        "network_zone": "eu-central",
+                        "zone": "eu-central",
                     }
                 },
             ),
