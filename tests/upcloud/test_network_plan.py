@@ -107,17 +107,16 @@ class TestParseMarkerValidation:
     def test_network_not_a_mapping(self, capsys):
         _assert_fail({"network": "x"}, "'network' must be a mapping", capsys)
 
-    def test_network_zone_key_rejected(self, capsys):
-        # Hetzner-shaped marker: network_zone has no meaning for UpCloud.
+    def test_legacy_network_zone_key_rejected(self, capsys):
+        # Legacy Hetzner-shaped key: network_zone has been renamed to zone.
         m = _marker(
             network={
                 "name": "n",
                 "ip_range": "10.0.0.0/24",
-                "zone": "de-fra1",
                 "network_zone": "eu-central",
             }
         )
-        _assert_fail(m, "network_zone is not valid", capsys)
+        _assert_fail(m, "network.network_zone has been renamed to network.zone", capsys)
 
     def test_missing_name(self, capsys):
         _assert_fail(

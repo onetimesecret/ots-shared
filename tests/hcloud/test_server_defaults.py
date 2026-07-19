@@ -282,6 +282,39 @@ class TestResolveHostDefaultsCoercion:
         assert result is not None
         assert result.get("backup") is False
 
+    def test_volumes_list_roundtrip(self):
+        # Volume entries may be literal names or `{hostname}`-templated;
+        # the schema layer passes both through untouched — placeholder
+        # expansion happens at the create() call site.
+        find, load = _patched({"db": {"volumes": ["{hostname}-data", "shared-logs"]}})
+        with find, load:
+            result = resolve_host_defaults(role="db", name="db-01")
+        assert result is not None
+        assert result.get("volumes") == ["{hostname}-data", "shared-logs"]
+
+    def test_volumes_missing_returns_empty_list(self):
+        find, load = _patched({"db": {"server_type": "cx22"}})
+        with find, load:
+            result = resolve_host_defaults(role="db", name="db-01")
+        assert result is not None
+        assert result.get("volumes") == []
+
+    def test_public_ipv4_bool_accepted(self):
+        # `public_ipv4: false` under hosts.<role> must not trip the
+        # unknown-key check — it drives the no-public-IP db pattern.
+        find, load = _patched({"db": {"public_ipv4": False, "public_ipv6": False}})
+        with find, load:
+            result = resolve_host_defaults(role="db", name="db-01")
+        assert result is not None
+        assert result.get("public_ipv4") is False
+        assert result.get("public_ipv6") is False
+
+    def test_public_ipv4_rejects_stringly_bool(self):
+        find, load = _patched({"db": {"public_ipv4": "false"}})
+        with find, load:
+            with pytest.raises(SystemExit, match="public_ipv4.*must be bool"):
+                resolve_host_defaults(role="db", name="db-01")
+
     def test_missing_str_key_returns_none(self):
         find, load = _patched({"web": {"server_type": "cx11"}})
         with find, load:
@@ -491,7 +524,7 @@ class TestMarkerNetworkName:
             {
                 "name": "priv-net",
                 "ip_range": "10.101.0.0/16",
-                "network_zone": "eu-central",
+                "zone": "eu-central",
             }
         )
         with find, load:
@@ -522,7 +555,7 @@ class TestMarkerNetworkName:
                     "network": {
                         "name": "explicit-net",
                         "ip_range": "10.50.0.0/16",
-                        "network_zone": "eu-central",
+                        "zone": "eu-central",
                     }
                 },
             ),
