@@ -281,7 +281,7 @@ def _validate_locations(
             _fail(
                 marker_path,
                 f"hosts.{role}.location {location!r} is in zone {zone!r} "
-                f"but network.network_zone is {network_zone!r}",
+                f"but network.zone is {network_zone!r}",
             )
 
 
@@ -291,13 +291,13 @@ def parse_marker(marker: dict, *, marker_path: Path) -> DesiredState:
     Required keys:
       - ``network.name`` — non-empty str
       - ``network.ip_range`` — IPv4 CIDR /8–/16
-      - ``network.network_zone`` — value from :data:`KNOWN_ZONES`
+      - ``network.zone`` — value from :data:`KNOWN_ZONES`
 
     Per-host validation:
       - Each ``hosts.<role>.private_ip_address`` (when present) must lie
         inside the master CIDR.
       - Each ``hosts.<role>.location`` (when present) must map to the
-        same zone as ``network.network_zone``.
+        same zone as ``network.zone``.
 
     Hosts may omit either field; they're skipped for that check.
     """
@@ -308,7 +308,7 @@ def parse_marker(marker: dict, *, marker_path: Path) -> DesiredState:
     if network_block is None:
         _fail(
             marker_path,
-            "missing top-level 'network:' block. Expected keys: name, ip_range, network_zone.",
+            "missing top-level 'network:' block. Expected keys: name, ip_range, zone.",
         )
     if not isinstance(network_block, dict):
         _fail(
@@ -318,12 +318,19 @@ def parse_marker(marker: dict, *, marker_path: Path) -> DesiredState:
 
     name = _require_str(marker_path, "name", network_block.get("name"))
     ip_range = _require_str(marker_path, "ip_range", network_block.get("ip_range"))
-    network_zone = _require_str(marker_path, "network_zone", network_block.get("network_zone"))
+    if "zone" not in network_block and "network_zone" in network_block:
+        _fail(
+            marker_path,
+            "network.network_zone has been renamed to network.zone. Rename the key "
+            "under the 'network:' block in otsinfra.yaml (the value is unchanged): "
+            "'network_zone:' -> 'zone:'.",
+        )
+    network_zone = _require_str(marker_path, "zone", network_block.get("zone"))
 
     if network_zone not in KNOWN_ZONES:
         _fail(
             marker_path,
-            f"network.network_zone {network_zone!r} is not a known Hetzner zone. "
+            f"network.zone {network_zone!r} is not a known Hetzner zone. "
             f"Known: {sorted(KNOWN_ZONES)}",
         )
 

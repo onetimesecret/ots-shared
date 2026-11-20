@@ -24,7 +24,7 @@ class TestGetNetworkHappyPath:
             "network": {
                 "name": "priv-net",
                 "ip_range": "10.101.0.0/16",
-                "network_zone": "eu-central",
+                "zone": "eu-central",
             },
         }
         result = get_network(marker)
@@ -38,7 +38,7 @@ class TestGetNetworkHappyPath:
             "network": {
                 "name": "priv-net",
                 "ip_range": "10.101.0.0/16",
-                "network_zone": "eu-central",
+                "zone": "eu-central",
             },
         }
         result = get_network(marker)
@@ -79,7 +79,7 @@ class TestGetNetworkBadTypes:
             "network": {
                 "name": "priv-net",
                 "ip_range": 5,  # int instead of "10.101.0.0/16"
-                "network_zone": "eu-central",
+                "zone": "eu-central",
             },
         }
         with pytest.raises((TypeError, ValueError)):
@@ -90,18 +90,18 @@ class TestGetNetworkBadTypes:
             "network": {
                 "name": 42,
                 "ip_range": "10.101.0.0/16",
-                "network_zone": "eu-central",
+                "zone": "eu-central",
             },
         }
         with pytest.raises((TypeError, ValueError)):
             get_network(marker)
 
-    def test_raises_when_network_zone_is_list(self):
+    def test_raises_when_zone_is_list(self):
         marker = {
             "network": {
                 "name": "priv-net",
                 "ip_range": "10.101.0.0/16",
-                "network_zone": ["eu-central"],
+                "zone": ["eu-central"],
             },
         }
         with pytest.raises((TypeError, ValueError)):
@@ -115,7 +115,7 @@ class TestGetNetworkMissingKeys:
         marker = {
             "network": {
                 "ip_range": "10.101.0.0/16",
-                "network_zone": "eu-central",
+                "zone": "eu-central",
             },
         }
         with pytest.raises((KeyError, ValueError)):
@@ -125,7 +125,7 @@ class TestGetNetworkMissingKeys:
         marker = {
             "network": {
                 "name": "priv-net",
-                "network_zone": "eu-central",
+                "zone": "eu-central",
             },
         }
         with pytest.raises((KeyError, ValueError)):

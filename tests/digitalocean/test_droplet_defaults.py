@@ -168,3 +168,21 @@ class TestLoadCloudInit:
     def test_command_empty_output_fail_loud(self):
         with pytest.raises(SystemExit, match="no output"):
             load_cloud_init_user_data(None, "true")
+
+    def test_non_ascii_file_rejected(self, tmp_path):
+        f = tmp_path / "ci.yaml"
+        f.write_text("#cloud-config\n# generated — by lots\n")
+        with pytest.raises(SystemExit, match="non-ASCII") as exc:
+            load_cloud_init_user_data(f)
+        # Message must name the char and its position so it is actionable.
+        assert "U+2014" in str(exc.value)
+
+    def test_non_ascii_command_rejected(self):
+        with pytest.raises(SystemExit, match="non-ASCII"):
+            load_cloud_init_user_data(None, "printf '#cloud-config\\n# \\342\\206\\222'")
+
+    def test_ascii_file_accepted(self, tmp_path):
+        f = tmp_path / "ci.yaml"
+        f.write_text("#cloud-config\n# generated - by lots\n")
+        payload = load_cloud_init_user_data(f)
+        assert payload is not None

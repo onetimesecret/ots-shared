@@ -89,9 +89,17 @@ MARKER_HOST_FIELDS: tuple[MarkerField, ...] = (
     # No CLI flag wiring — the value is consumed by ``lots cloudinit
     # generate-env``, not by ``server create``.
     MarkerField("profile", str, "--profile"),
-    # Representative non-str examples proving the coercion story. Wiring
-    # these into `create()` (if desired) is a separate pass.
+    # Firewalls to bind and volumes to attach at create time. Volume
+    # entries may use a literal name or the `{hostname}` placeholder
+    # (e.g. "{hostname}-data" -> "eu-db-01-data") so a role-level list
+    # stays correct across ordinals.
     MarkerField("firewalls", list, "--firewall"),
+    MarkerField("volumes", list, "--volume"),
+    # Public-net toggles, consumed via get_host_public_net (which also
+    # honors per-ordinal overrides). Listed here so the fail-loud
+    # unknown-key check accepts them under hosts.<role>.
+    MarkerField("public_ipv4", bool, "--public-net-ipv4"),
+    MarkerField("public_ipv6", bool, "--public-net-ipv6"),
     MarkerField("backup", bool, "--backup"),
 )
 # The network is defined once per environment under the top-level

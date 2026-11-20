@@ -701,10 +701,17 @@ def get_network(marker: dict) -> MarkerNetwork | None:
             )
         return value
 
+    if "zone" not in block and "network_zone" in block:
+        raise KeyError(
+            "network.network_zone has been renamed to network.zone; rename the key "
+            "under the 'network:' block in otsinfra.yaml (value unchanged): "
+            "'network_zone:' -> 'zone:'."
+        )
+
     return MarkerNetwork(
         name=_require_str("name"),
         ip_range=_require_str("ip_range"),
-        network_zone=_require_str("network_zone"),
+        network_zone=_require_str("zone"),
     )
 
 

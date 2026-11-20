@@ -207,9 +207,9 @@ def parse_marker(marker: dict, *, marker_path: Path) -> DesiredState:
     Required keys under the top-level ``network:`` block:
       - ``name`` — non-empty str
       - ``ip_range`` — IPv4 CIDR /8–/29
-      - ``zone`` — the atomic zone id (e.g. ``de-fra1``). There is **no**
-        ``network_zone`` for UpCloud; a ``network_zone`` key is fail-loud to
-        catch a Hetzner-shaped marker.
+      - ``zone`` — the atomic zone id (e.g. ``de-fra1``). The marker locator
+        key is ``zone`` for every provider; a legacy ``network_zone`` key is
+        fail-loud with a rename hint.
 
     Per-host validation: every declared private IP / CIDR must lie inside
     ``network.ip_range``. The zone is validated against :data:`KNOWN_ZONES`
@@ -228,11 +228,12 @@ def parse_marker(marker: dict, *, marker_path: Path) -> DesiredState:
     if not isinstance(network_block, dict):
         _fail(marker_path, f"'network' must be a mapping, got {type(network_block).__name__}")
 
-    if "network_zone" in network_block:
+    if "zone" not in network_block and "network_zone" in network_block:
         _fail(
             marker_path,
-            "network.network_zone is not valid for UpCloud (zones are atomic; "
-            "use network.zone with an atomic zone id like de-fra1).",
+            "network.network_zone has been renamed to network.zone. Rename the key "
+            "under the 'network:' block in otsinfra.yaml (the value is unchanged): "
+            "'network_zone:' -> 'zone:' (an atomic zone id like de-fra1).",
         )
 
     name = _require_str(marker_path, "name", network_block.get("name"))

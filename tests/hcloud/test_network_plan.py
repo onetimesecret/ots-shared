@@ -39,7 +39,7 @@ def _valid_network() -> dict:
     return {
         "name": "priv-net",
         "ip_range": "10.101.0.0/16",
-        "network_zone": "eu-central",
+        "zone": "eu-central",
     }
 
 
@@ -138,7 +138,7 @@ class TestParseMarkerSchemaFailures:
 
     def test_missing_network_name(self):
         marker = {
-            "network": {"ip_range": "10.101.0.0/16", "network_zone": "eu-central"},
+            "network": {"ip_range": "10.101.0.0/16", "zone": "eu-central"},
             "hosts": {},
         }
         with pytest.raises(SystemExit) as exc:
@@ -147,7 +147,7 @@ class TestParseMarkerSchemaFailures:
 
     def test_missing_network_ip_range(self):
         marker = {
-            "network": {"name": "priv-net", "network_zone": "eu-central"},
+            "network": {"name": "priv-net", "zone": "eu-central"},
             "hosts": {},
         }
         with pytest.raises(SystemExit) as exc:
@@ -168,7 +168,7 @@ class TestParseMarkerSchemaFailures:
             "network": {
                 "name": "priv-net",
                 "ip_range": "not-a-cidr",
-                "network_zone": "eu-central",
+                "zone": "eu-central",
             },
             "hosts": {},
         }
@@ -182,7 +182,7 @@ class TestParseMarkerSchemaFailures:
             "network": {
                 "name": "priv-net",
                 "ip_range": "10.101.0.0/24",
-                "network_zone": "eu-central",
+                "zone": "eu-central",
             },
             "hosts": {},
         }
@@ -195,7 +195,7 @@ class TestParseMarkerSchemaFailures:
             "network": {
                 "name": "priv-net",
                 "ip_range": "10.101.0.0/16",
-                "network_zone": "mars",
+                "zone": "mars",
             },
             "hosts": {},
         }
